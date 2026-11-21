@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build output
+.next/
+out/
+
+# Go build binaries & local runtime state
+backend/civicledger-api
+backend/civicledger-api.exe
+backend/.civicledger-go-state.json
+.civicledger-ledger.json
+
+# Environment & secrets (STACK 2026 compliance: never commit secrets)
+.env
+.env*.local
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db

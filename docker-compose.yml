@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: civicledger-postgres
+    environment:
+      POSTGRES_USER: civicledger
+      POSTGRES_PASSWORD: civicledger_acid_password
+      POSTGRES_DB: civicledger_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicledger -d civicledger_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: civicledger-go-api
+    environment:
+      PORT: "8081"
+      DATABASE_URL: postgresql://civicledger:civicledger_acid_password@postgres:5432/civicledger_db?sslmode=disable
+      CIVICLEDGER_HMAC_SECRET: CIVICLEDGER_RT04_RW08_COBLONG_HMAC_SECRET_2026
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
