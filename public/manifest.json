@@ -1,11 +1,11 @@
 {
-  "name": "CivicLedger — Resilient Local Voucher Clearinghouse",
+  "name": "CivicLedger — Local Voucher Clearinghouse",
   "short_name": "CivicLedger",
   "description": "Offline-first voucher clearinghouse for community mutual aid by Team Run.exe (STACK 2026 - Case 2)",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#059669",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
   "orientation": "portrait-primary",
   "icons": [
     {

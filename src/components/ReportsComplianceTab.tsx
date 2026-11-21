@@ -1,21 +1,7 @@
 "use client";
 
 import React from "react";
-import {
-  BarChart3,
-  CheckCircle2,
-  Download,
-  FileJson,
-  FileSpreadsheet,
-  ShieldAlert,
-  ShieldCheck,
-  Store,
-  Server,
-  Clock,
-  Layers,
-  Info,
-  Sparkles,
-} from "lucide-react";
+import { Download } from "lucide-react";
 import {
   BackendEngineType,
   Beneficiary,
@@ -76,7 +62,6 @@ export default function ReportsComplianceTab({
     0
   );
 
-  // Aggregate by commodity
   const commodityMap = new Map<
     string,
     { name: string; count: number; totalIdr: number }
@@ -94,163 +79,163 @@ export default function ReportsComplianceTab({
   const commodityStats = Array.from(commodityMap.values()).sort(
     (a, b) => b.totalIdr - a.totalIdr
   );
-  const maxCommodityIdr = Math.max(
-    1,
-    ...commodityStats.map((c) => c.totalIdr)
-  );
-
+  const maxCommodityIdr = Math.max(1, ...commodityStats.map((c) => c.totalIdr));
   const maxMerchantTurnover = Math.max(
     1,
     ...merchants.map((m) => m.total_settled_idr + m.unsettled_balance_idr)
   );
 
+  const engineLabel =
+    backendEngine === "GO_POSTGRES"
+      ? "Golang REST API · PostgreSQL 16"
+      : backendEngine === "GO_LOCAL"
+        ? "Golang REST API · Local Store"
+        : "Next.js Local Fallback";
+
   return (
     <div className="space-y-6">
-      {/* Header & Export Toolbar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      {/* Export Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-zinc-800/80">
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-            Step 5 • Reporting, Analytics &amp; Transparency
-          </span>
-          <h2 className="text-lg font-bold text-slate-900 mt-1.5">
-            Community Aid Performance &amp; Audit Reports
+          <h2 className="text-sm font-medium text-zinc-100">
+            Operational Summary &amp; Audit Exports
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Real-time operational reporting for community organizers, donors, and
-            STACK 2026 transparency verification.
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Download verifiable transaction logs and review scope disclosures.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onExportCsv}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium transition"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Export Ledger CSV</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
           </button>
           <button
             type="button"
             onClick={onExportJson}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-medium transition"
           >
-            <FileJson className="w-4 h-4" />
-            <span>Export Full Audit JSON</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Audit JSON</span>
           </button>
         </div>
       </div>
 
-      {/* Analytics KPI Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Redemption Rate</span>
-            <BarChart3 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+      {/* Unified 4-Column KPI Frame */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-800/80 border border-zinc-800/90 bg-[#111113] rounded-xl overflow-hidden">
+        <div className="p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
+            Redemption Rate
+          </p>
+          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
             {redemptionRate}%
           </p>
-          <p className="text-xs text-slate-500 mt-1">
-            {redeemedOrSettled} of {totalVouchers} issued vouchers redeemed
+          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
+            {redeemedOrSettled} of {totalVouchers} vouchers redeemed
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Offline vs Online Sync</span>
-            <Layers className="w-4 h-4 text-sky-600" />
-          </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+        <div className="p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
+            Offline / Online Sync
+          </p>
+          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
             {offlineSyncedCount} / {onlineSyncedCount}
           </p>
-          <p className="text-xs text-slate-500 mt-1">
-            Offline batch synced vs direct online redemptions
+          <p className="text-xs text-zinc-500 mt-1">
+            Batch synced vs. direct commits
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Duplicates &amp; Fraud Blocked</span>
-            <ShieldAlert className="w-4 h-4 text-rose-600" />
-          </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+        <div className="p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
+            Blocked Attempts
+          </p>
+          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
             {fraudBlockedCount}
           </p>
-          <p className="text-xs text-rose-700 mt-1 font-medium">
-            {conflictReconciledCount} offline conflicts caught in reconciliation
+          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
+            {conflictReconciledCount} offline conflicts reconciled
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Local Warung Economy</span>
-            <Store className="w-4 h-4 text-amber-600" />
-          </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+        <div className="p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
+            Local Merchant Volume
+          </p>
+          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
             {formatRupiah(totalMerchantTurnover)}
           </p>
-          <p className="text-xs text-emerald-700 mt-1 font-medium">
-            {merchants.length} stalls • {beneficiaries.length} verified
-            households
+          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
+            {merchants.length} stalls · {beneficiaries.length} households
           </p>
         </div>
       </div>
 
-      {/* Breakdown Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Commodity Package Distribution */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">
-            Allocation Breakdown by Commodity Package
-          </h3>
-          <p className="text-xs text-slate-500 mb-4">
-            Every voucher is locked to essential food staples to prevent cash
-            diversion.
-          </p>
+      {/* Monochrome Breakdown Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-medium text-zinc-100">
+                Allocation by Commodity
+              </h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Restricted staple disbursement distribution
+              </p>
+            </div>
+            <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
+              Pool: {formatRupiah(poolTotalIdr)}
+            </span>
+          </div>
+
           <div className="space-y-4">
             {commodityStats.map((item) => {
               const pct = Math.round((item.totalIdr / maxCommodityIdr) * 100);
               return (
                 <div key={item.name} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-800">
+                    <span className="text-zinc-200 font-medium">
                       {item.name}
                     </span>
-                    <span className="font-mono text-slate-600">
-                      {item.count}x •{" "}
-                      <strong className="text-emerald-700">
+                    <span className="font-mono text-zinc-400 tabular-nums">
+                      {item.count}× ·{" "}
+                      <span className="text-zinc-100">
                         {formatRupiah(item.totalIdr)}
-                      </strong>
+                      </span>
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-zinc-800/90 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(8, pct)}%` }}
+                      className="h-full bg-zinc-200 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.max(6, pct)}%` }}
                     />
                   </div>
                 </div>
               );
             })}
           </div>
-          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Remaining Community Aid Pool</span>
-            <span className="font-bold text-slate-900">
-              {formatRupiah(poolTotalIdr)}
-            </span>
-          </div>
         </div>
 
-        {/* Merchant Turnover Breakdown */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">
-            Local Merchant Turnover &amp; Disbursement Status
-          </h3>
-          <p className="text-xs text-slate-500 mb-4">
-            Retaining mutual aid spending inside neighborhood micro-merchants (
-            <em>warung kelontong</em>).
-          </p>
+        <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-medium text-zinc-100">
+                Merchant Turnover &amp; Settlement
+              </h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Settled vs. pending balances per neighborhood warung
+              </p>
+            </div>
+            <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
+              {settlementBatches.length} Batches
+            </span>
+          </div>
+
           <div className="space-y-4">
             {merchants.map((m) => {
               const total = m.total_settled_idr + m.unsettled_balance_idr;
@@ -267,169 +252,123 @@ export default function ReportsComplianceTab({
               return (
                 <div key={m.id} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-800 truncate pr-2">
+                    <span className="text-zinc-200 font-medium truncate pr-2">
                       {m.name}
                     </span>
-                    <span className="font-mono text-slate-600 whitespace-nowrap">
+                    <span className="font-mono text-zinc-300 tabular-nums whitespace-nowrap">
                       {formatRupiah(total)}
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
+                  <div className="w-full h-1.5 bg-zinc-800/90 rounded-full overflow-hidden flex">
                     <div
-                      className="h-full bg-emerald-600 transition-all duration-500"
+                      className="h-full bg-zinc-200 transition-all duration-500"
                       style={{ width: `${settledPct}%` }}
-                      title={`Settled: ${formatRupiah(m.total_settled_idr)}`}
                     />
                     <div
-                      className="h-full bg-amber-400 transition-all duration-500"
+                      className="h-full bg-zinc-500 transition-all duration-500"
                       style={{ width: `${pendingPct}%` }}
-                      title={`Pending: ${formatRupiah(m.unsettled_balance_idr)}`}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500">
-                    <span>
-                      Settled: {formatRupiah(m.total_settled_idr)}
-                    </span>
-                    <span className="text-amber-700 font-medium">
-                      Pending: {formatRupiah(m.unsettled_balance_idr)}
-                    </span>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 tabular-nums">
+                    <span>Settled {formatRupiah(m.total_settled_idr)}</span>
+                    <span>Pending {formatRupiah(m.unsettled_balance_idr)}</span>
                   </div>
                 </div>
               );
             })}
           </div>
-          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Total Completed Settlement Batches</span>
-            <span className="font-bold text-slate-900">
-              {settlementBatches.length} Batches
-            </span>
-          </div>
         </div>
       </div>
 
-      {/* STACK 2026 Compliance, Scope Honesty & Final Day Roadmap */}
-      <div className="bg-slate-900 text-slate-100 rounded-2xl border border-slate-800 p-6 shadow-sm space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">
-                STACK 2026 System Architecture &amp; Scope Disclosure
-              </h3>
-              <p className="text-xs text-slate-400">
-                Team <strong>Run.exe</strong> (Amos Belsing Arta Baringbing,
-                Jessica Ruth, Jonathan Pasaribu) • Case 2: Stronger Communities
-                and Everyday Services
-              </p>
-            </div>
+      {/* System Architecture & STACK 2026 Compliance Disclosure */}
+      <div className="bg-[#111113] rounded-xl border border-zinc-800/90 overflow-hidden">
+        <div className="px-5 py-4 border-b border-zinc-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium text-zinc-100">
+              System Architecture &amp; Scope Disclosure
+            </h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Team Run.exe (Amos Belsing Arta Baringbing, Jessica Ruth, Jonathan
+              Pasaribu) · STACK 2026 Case 2
+            </p>
           </div>
-
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-mono text-emerald-300">
-            <Server className="w-3.5 h-3.5" />
-            <span>
-              Active Engine:{" "}
-              {backendEngine === "GO_POSTGRES"
-                ? "Golang API + PostgreSQL"
-                : backendEngine === "GO_LOCAL"
-                  ? "Golang API (Local JSON Store)"
-                  : "Next.js Local Fallback"}
-            </span>
-          </div>
+          <span className="font-mono text-[11px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-md self-start sm:self-auto">
+            {engineLabel}
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          {/* Completed */}
-          <div className="p-4 rounded-xl bg-slate-950/70 border border-emerald-500/30 space-y-2.5">
-            <div className="flex items-center gap-2 font-bold text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Completed in Current Prototype</span>
-            </div>
-            <ul className="space-y-1.5 text-slate-300 list-disc pl-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-800/80 text-xs">
+          <div className="p-5 space-y-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-400">
+              Implemented Prototype
+            </p>
+            <ul className="space-y-2 text-zinc-400 leading-relaxed">
               <li>
-                Organizer beneficiary &amp; merchant registration + commodity-locked
-                voucher issuance with HMAC-SHA256 &amp; unique nonces.
+                Organizer registration for beneficiaries &amp; local merchants,
+                plus HMAC-SHA256 voucher issuance with unique nonces.
               </li>
               <li>
-                Beneficiary wallet supporting dynamic QR payloads and 6-character
-                SMS/printed fallback codes.
+                Dual-channel beneficiary pass with dynamic QR code and
+                6-character SMS / printed code fallback.
               </li>
               <li>
-                Offline-capable Merchant POS using PWA Service Worker,{" "}
-                <code className="text-emerald-300">window.crypto.subtle</code>,
-                and <code className="text-emerald-300">IndexedDB</code> queue.
+                Offline-capable Merchant POS using Web Crypto API (
+                <span className="font-mono text-zinc-300">crypto.subtle</span>)
+                and <span className="font-mono text-zinc-300">IndexedDB</span>{" "}
+                queue.
               </li>
               <li>
-                Golang REST API + PostgreSQL schema with unique{" "}
-                <code className="text-emerald-300">client_tx_id</code> conflict
-                reconciliation, SHA-256 hash-chained ledger, and CSV/JSON reports.
+                Golang REST API + PostgreSQL schema with server-side conflict
+                reconciliation, SHA-256 hash-chained ledger, and CSV/JSON export.
               </li>
             </ul>
           </div>
 
-          {/* Simulated / Limitations */}
-          <div className="p-4 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-2.5">
-            <div className="flex items-center gap-2 font-bold text-amber-400">
-              <Info className="w-4 h-4" />
-              <span>Simulated Data &amp; Known Limitations</span>
-            </div>
-            <ul className="space-y-1.5 text-slate-300 list-disc pl-4">
+          <div className="p-5 space-y-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-400">
+              Simulated Scope &amp; Limitations
+            </p>
+            <ul className="space-y-2 text-zinc-400 leading-relaxed">
               <li>
-                <strong>Synthetic Data:</strong> Resident profiles (
-                <code>WGA-0401</code>–<code>WGA-0404</code>) and local stalls (
-                <code>WRG-01</code>–<code>WRG-03</code>) are synthetic demo
-                records for Coblong, Bandung.
+                <span className="text-zinc-200">Synthetic Data:</span> Pre-loaded
+                beneficiaries (WGA-0401–0404) and merchants (WRG-01–03) are
+                synthetic demonstration records.
               </li>
               <li>
-                <strong>Simulated Disbursement Rails:</strong> Settlement batches
-                generate verifiable SHA-256 receipts without live BI-FAST/QRIS
+                <span className="text-zinc-200">Settlement Rails:</span> Payout
+                batches produce SHA-256 receipts without live BI-FAST or QRIS
                 bank transfers.
               </li>
               <li>
-                <strong>Shared HMAC Secret:</strong> Prototype uses a neighborhood
-                HMAC-SHA256 key to verify offline signatures in-browser.
+                <span className="text-zinc-200">Shared Secret Key:</span>{" "}
+                Browser offline verification currently uses a shared neighborhood
+                HMAC secret.
               </li>
             </ul>
           </div>
 
-          {/* Final Day Planned Tasks */}
-          <div className="p-4 rounded-xl bg-slate-950/70 border border-sky-500/30 space-y-2.5">
-            <div className="flex items-center gap-2 font-bold text-sky-400">
-              <Sparkles className="w-4 h-4" />
-              <span>Planned Final Day Build Tasks</span>
-            </div>
-            <ul className="space-y-1.5 text-slate-300 list-disc pl-4">
+          <div className="p-5 space-y-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-400">
+              Planned Final Day Tasks
+            </p>
+            <ul className="space-y-2 text-zinc-400 leading-relaxed">
               <li>
-                <strong>Task 1 — Asymmetric Ed25519 Signing:</strong> Upgrade
-                offline verification from shared HMAC secret to Ed25519
-                public-key verification so merchant browsers never hold a signing
-                secret.
+                <span className="text-zinc-200">1. Asymmetric Ed25519:</span>{" "}
+                Replace shared HMAC verification with server-signed Ed25519
+                public-key checks in merchant browsers.
               </li>
               <li>
-                <strong>Task 2 — Role-Based Auth &amp; Device Binding:</strong>{" "}
-                Add JWT login for organizers &amp; authorized merchant device
-                provisioning with revocation list sync.
+                <span className="text-zinc-200">2. Auth &amp; Device Binding:</span>{" "}
+                Add JWT organizer login and authorized merchant device
+                provisioning with revocation sync.
               </li>
               <li>
-                <strong>Task 3 — Automated SMS Dispatch &amp; Usability Polish:</strong>{" "}
-                Integrate webhook/SMS slip generator and refine low-literacy POS
-                confirmation flow from pilot feedback.
+                <span className="text-zinc-200">3. SMS Dispatch &amp; Polish:</span>{" "}
+                Integrate automated SMS slip webhook and apply pilot usability
+                improvements.
               </li>
             </ul>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-[11px] text-slate-400">
-          <span className="inline-flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-slate-500" />
-            All claims, metrics, and simulated workflows strictly follow STACK
-            2026 integrity rules.
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            No AI models required in core deterministic clearinghouse logic.
-          </span>
         </div>
       </div>
     </div>
