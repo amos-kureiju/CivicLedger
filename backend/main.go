@@ -146,26 +146,26 @@ type ClearinghouseState struct {
 var commodityCatalog = []CommodityItem{
 	{
 		Code:       "PKG-BERAS-5KG",
-		Name:       "Local Rice Staple Pack (5 Kg)",
-		Items:      "5 Kg Medium-Grade Rice (Commodity-Locked, Non-Cash)",
+		Name:       "Paket Beras Lokal Medium (5 Kg)",
+		Items:      "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
 		NominalIDR: 72500,
 	},
 	{
 		Code:       "PKG-PROTEIN-01",
-		Name:       "Family Protein & Nutrition Pack",
-		Items:      "1 Kg Eggs + 2 Blocks Tempeh + 10 Pieces Tofu",
+		Name:       "Paket Gizi & Protein Keluarga",
+		Items:      "Telur Ayam 1 Kg + Tempe 2 Papan + Tahu 10 Potong",
 		NominalIDR: 42000,
 	},
 	{
 		Code:       "PKG-DAPUR-02",
-		Name:       "Cooking Oil & Kitchen Essentials",
-		Items:      "2L Cooking Oil + 1 Kg Granulated Sugar + Iodized Salt",
+		Name:       "Paket Minyak Goreng & Pokok Dapur",
+		Items:      "Minyak Goreng 2 Liter + Gula Pasir 1 Kg + Garam Beryodium",
 		NominalIDR: 51000,
 	},
 	{
 		Code:       "PKG-DARURAT-FULL",
-		Name:       "Emergency Complete Staple Pack",
-		Items:      "5 Kg Rice + 1 Kg Eggs + 1L Cooking Oil + Child Milk",
+		Name:       "Paket Sembako Darurat Lengkap",
+		Items:      "Beras 5 Kg + Telur 1 Kg + Minyak Goreng 1L + Susu Anak",
 		NominalIDR: 115000,
 	},
 }
@@ -229,7 +229,7 @@ func verifyLedgerChain(entries []LedgerEntry) ChainVerificationResult {
 			Valid:        true,
 			CheckedCount: 0,
 			HeadHash:     genesisHash,
-			Message:      "Ledger is empty; genesis hash intact.",
+			Message:      "Buku besar masih kosong; jangkar hash genesis utuh.",
 		}
 	}
 
@@ -243,7 +243,7 @@ func verifyLedgerChain(entries []LedgerEntry) ChainVerificationResult {
 				CheckedCount: len(entries) - i,
 				HeadHash:     entries[0].TxHash,
 				BrokenAtID:   e.ID,
-				Message:      fmt.Sprintf("Hash chain discontinuity detected at transaction %s", e.ID),
+				Message:      fmt.Sprintf("Terdeteksi pemutusan rantai hash pada transaksi %s.", e.ID),
 			}
 		}
 		recomputed := computeLedgerTxHash(e.PrevHash, e.VoucherID, e.MerchantID, e.NominalIDR, e.Timestamp, e.HMACSignature)
@@ -253,7 +253,7 @@ func verifyLedgerChain(entries []LedgerEntry) ChainVerificationResult {
 				CheckedCount: len(entries) - i,
 				HeadHash:     entries[0].TxHash,
 				BrokenAtID:   e.ID,
-				Message:      fmt.Sprintf("Tampered ledger payload detected at transaction %s", e.ID),
+				Message:      fmt.Sprintf("Terdeteksi manipulasi payload buku besar pada transaksi %s.", e.ID),
 			}
 		}
 		expectedPrev = e.TxHash
@@ -263,7 +263,7 @@ func verifyLedgerChain(entries []LedgerEntry) ChainVerificationResult {
 		Valid:        true,
 		CheckedCount: len(entries),
 		HeadHash:     entries[0].TxHash,
-		Message:      fmt.Sprintf("All %d ledger entries verified against SHA-256 hash chain.", len(entries)),
+		Message:      fmt.Sprintf("Seluruh %d entri buku besar terverifikasi utuh terhadap rantai hash SHA-256.", len(entries)),
 	}
 }
 
@@ -279,39 +279,39 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 	beneficiaries := []Beneficiary{
 		{
 			ID:            "WGA-0401",
-			Name:          "Ibu Siti Aminah (Elderly)",
+			Name:          "Ibu Siti Aminah (Lansia)",
 			RtRw:          "RT 04 / RW 08 Coblong, Bandung",
-			Category:      "Vulnerable Senior Household",
-			Phone:         "0812-2104-8891 (SMS / Printed Code)",
+			Category:      "Keluarga Lansia Rentan",
+			Phone:         "0812-2104-8891 (SMS / Kode Cetak)",
 			HouseholdSize: 2,
-			VerifiedBy:    "RT 04 Coordinator — Pak H. Dedi",
+			VerifiedBy:    "Koordinator RT 04 — Pak H. Dedi",
 		},
 		{
 			ID:            "WGA-0402",
-			Name:          "Pak Deden Suryana Family",
+			Name:          "Keluarga Pak Deden Suryana",
 			RtRw:          "RT 04 / RW 08 Coblong, Bandung",
-			Category:      "Displaced Daily-Wage Worker",
-			Phone:         "0857-9412-3302 (Mobile PWA QR)",
+			Category:      "Pekerja Harian Lepas Terdampak",
+			Phone:         "0857-9412-3302 (QR Web Ponsel)",
 			HouseholdSize: 4,
-			VerifiedBy:    "RT 04 Coordinator — Pak H. Dedi",
+			VerifiedBy:    "Koordinator RT 04 — Pak H. Dedi",
 		},
 		{
 			ID:            "WGA-0403",
 			Name:          "Ibu Rina Kartika",
 			RtRw:          "RT 02 / RW 08 Coblong, Bandung",
-			Category:      "Single-Parent Household",
-			Phone:         "0813-2289-7104 (Mobile PWA QR)",
+			Category:      "Kepala Keluarga Perempuan",
+			Phone:         "0813-2289-7104 (QR Web Ponsel)",
 			HouseholdSize: 3,
-			VerifiedBy:    "RW 08 Posyandu Volunteer",
+			VerifiedBy:    "Relawan Posyandu RW 08",
 		},
 		{
 			ID:            "WGA-0404",
 			Name:          "Pak Maman Abdurrahman",
 			RtRw:          "RT 05 / RW 08 Coblong, Bandung",
-			Category:      "Medical Recovery Support",
-			Phone:         "0896-5541-0029 (SMS / Printed Code)",
+			Category:      "Pemulihan Medis & Rentan",
+			Phone:         "0896-5541-0029 (SMS / Kode Cetak)",
 			HouseholdSize: 3,
-			VerifiedBy:    "RW 08 Chair — Ir. Bambang",
+			VerifiedBy:    "Ketua RW 08 — Ir. Bambang",
 		},
 	}
 
@@ -331,7 +331,7 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			Name:                "Toko Sembako Pak Asep Mandiri",
 			Owner:               "Pak Asep Sunandar",
 			RtRw:                "RT 02 / RW 08 (Jl. Cisitu Lama)",
-			BankAccount:         "Bank BJB Micro / QRIS •• 9012",
+			BankAccount:         "Bank BJB Mikro / QRIS •• 9012",
 			UnsettledBalanceIDR: 51000,
 			TotalSettledIDR:     350000,
 			RedemptionCount:     4,
@@ -341,7 +341,7 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			Name:                "Warung Sayur & Pangan Teh Euis",
 			Owner:               "Teh Euis Komariah",
 			RtRw:                "RT 05 / RW 08 (Gg. Dago Pojok)",
-			BankAccount:         "Mandiri Micro / GoPay Merchant •• 3319",
+			BankAccount:         "Mandiri Mikro / GoPay Merchant •• 3319",
 			UnsettledBalanceIDR: 0,
 			TotalSettledIDR:     290000,
 			RedemptionCount:     3,
@@ -361,11 +361,11 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			ID:              "VCH-2026-8841",
 			ShortCode:       "CL-8841-K9",
 			BeneficiaryID:   "WGA-0401",
-			BeneficiaryName: "Ibu Siti Aminah (Elderly)",
+			BeneficiaryName: "Ibu Siti Aminah (Lansia)",
 			RtRw:            "RT 04 / RW 08 Coblong, Bandung",
 			CommodityCode:   "PKG-BERAS-5KG",
-			CommodityName:   "Local Rice Staple Pack (5 Kg)",
-			CommodityItems:  "5 Kg Medium-Grade Rice (Commodity-Locked, Non-Cash)",
+			CommodityName:   "Paket Beras Lokal Medium (5 Kg)",
+			CommodityItems:  "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
 			NominalIDR:      72500,
 			Nonce:           "n9f81a2b4c6d",
 			IssuedAt:        issuedIso,
@@ -377,11 +377,11 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			ID:              "VCH-2026-7732",
 			ShortCode:       "CL-7732-M4",
 			BeneficiaryID:   "WGA-0402",
-			BeneficiaryName: "Pak Deden Suryana Family",
+			BeneficiaryName: "Keluarga Pak Deden Suryana",
 			RtRw:            "RT 04 / RW 08 Coblong, Bandung",
 			CommodityCode:   "PKG-DARURAT-FULL",
-			CommodityName:   "Emergency Complete Staple Pack",
-			CommodityItems:  "5 Kg Rice + 1 Kg Eggs + 1L Cooking Oil + Child Milk",
+			CommodityName:   "Paket Sembako Darurat Lengkap",
+			CommodityItems:  "Beras 5 Kg + Telur 1 Kg + Minyak Goreng 1L + Susu Anak",
 			NominalIDR:      115000,
 			Nonce:           "a3c5e7f91b2d",
 			IssuedAt:        issuedIso,
@@ -396,8 +396,8 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			BeneficiaryName: "Ibu Rina Kartika",
 			RtRw:            "RT 02 / RW 08 Coblong, Bandung",
 			CommodityCode:   "PKG-PROTEIN-01",
-			CommodityName:   "Family Protein & Nutrition Pack",
-			CommodityItems:  "1 Kg Eggs + 2 Blocks Tempeh + 10 Pieces Tofu",
+			CommodityName:   "Paket Gizi & Protein Keluarga",
+			CommodityItems:  "Telur Ayam 1 Kg + Tempe 2 Papan + Tahu 10 Potong",
 			NominalIDR:      42000,
 			Nonce:           "d4e8f1a09c3b",
 			IssuedAt:        issuedIso,
@@ -412,8 +412,8 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			BeneficiaryName:        "Pak Maman Abdurrahman",
 			RtRw:                   "RT 05 / RW 08 Coblong, Bandung",
 			CommodityCode:          "PKG-BERAS-5KG",
-			CommodityName:          "Local Rice Staple Pack (5 Kg)",
-			CommodityItems:         "5 Kg Medium-Grade Rice (Commodity-Locked, Non-Cash)",
+			CommodityName:          "Paket Beras Lokal Medium (5 Kg)",
+			CommodityItems:         "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
 			NominalIDR:             72500,
 			Nonce:                  "b7c2d9e41f8a",
 			IssuedAt:               earlierRedeemedIso,
@@ -436,7 +436,7 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			BeneficiaryID: "WGA-0404",
 			MerchantID:    "WRG-01",
 			MerchantName:  "Warung Kelontong Berkah Bu Yati",
-			CommodityName: "Local Rice Staple Pack (5 Kg)",
+			CommodityName: "Paket Beras Lokal Medium (5 Kg)",
 			NominalIDR:    72500,
 			HMACSignature: v4Sig,
 			PrevHash:      genesisHash,
@@ -461,7 +461,7 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			ID:             "STL-2026-B42C11",
 			MerchantID:     "WRG-02",
 			MerchantName:   "Toko Sembako Pak Asep Mandiri",
-			BankAccount:    "Bank BJB Micro / QRIS •• 9012",
+			BankAccount:    "Bank BJB Mikro / QRIS •• 9012",
 			VoucherCount:   3,
 			TotalAmountIDR: 350000,
 			BatchHash:      computeSHA256Hex("STL-2026-B42C11|WRG-02|350000"),
@@ -478,7 +478,7 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 			MerchantID:   "WRG-01",
 			MerchantName: "Warung Kelontong Berkah Bu Yati",
 			Outcome:      "SYNCED",
-			Reason:       "Offline redemption verified via HMAC-SHA256 and committed to hash-chained ledger.",
+			Reason:       "Penukaran offline terverifikasi melalui HMAC-SHA256 dan dicatat ke buku besar rantai hash.",
 			ProcessedAt:  earlierRedeemedIso,
 		},
 	}
@@ -1000,14 +1000,14 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 
 	if v.Status != "ACTIVE" {
 		s.state.FraudBlockedCount++
-		prevMerchant := "a partner merchant"
+		prevMerchant := "warung mitra lain"
 		if v.RedeemedByMerchantName != nil {
 			prevMerchant = *v.RedeemedByMerchantName
 		}
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusConflict,
 			Outcome: "DUPLICATE_CONFLICT",
-			Message: fmt.Sprintf("Anti-Double-Spend Reject: Voucher %s is already %s (redeemed at %s).", v.ShortCode, v.Status, prevMerchant),
+			Message: fmt.Sprintf("Ditolak (Anti-Double-Spend): Voucher %s sudah berstatus %s (telah ditukar di %s).", v.ShortCode, v.Status, prevMerchant),
 		}
 	}
 
@@ -1016,7 +1016,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusGone,
 			Outcome: "EXPIRED",
-			Message: fmt.Sprintf("Voucher %s has expired.", v.ShortCode),
+			Message: fmt.Sprintf("Voucher %s sudah kedaluwarsa.", v.ShortCode),
 		}
 	}
 
@@ -1026,7 +1026,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusForbidden,
 			Outcome: "INVALID_SIGNATURE",
-			Message: "Cryptographic verification failed: HMAC-SHA256 signature mismatch (possible payload tampering).",
+			Message: "Verifikasi kriptografi gagal: tanda tangan HMAC-SHA256 tidak cocok (indikasi manipulasi payload).",
 		}
 	}
 
@@ -1179,7 +1179,7 @@ func (s *ClearinghouseService) BatchSync(items []BatchSyncItem) ([]BatchSyncResu
 			MerchantID:   m.ID,
 			MerchantName: m.Name,
 			Outcome:      "SYNCED",
-			Reason:       "Offline transaction validated by Go server and appended to hash-chained ledger.",
+			Reason:       "Transaksi offline divalidasi oleh server Golang dan dicatat ke buku besar rantai hash.",
 			ProcessedAt:  nowIso,
 		}
 		s.state.ReconciliationLogs = append([]ReconciliationLog{recLog}, s.state.ReconciliationLogs...)

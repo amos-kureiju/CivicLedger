@@ -1,4 +1,4 @@
-const CACHE_NAME = 'civicledger-offline-v2';
+const CACHE_NAME = 'civicledger-offline-v3';
 const OFFLINE_URLS = ['/', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -28,7 +28,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
-  // Never serve stale API JSON from Service Worker cache; IndexedDB manages offline data
+  // Never intercept or serve stale API responses from Service Worker cache
   if (url.pathname.startsWith('/api/')) return;
 
   event.respondWith(

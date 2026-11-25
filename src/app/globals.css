@@ -3,16 +3,18 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+}
+
+html.dark {
   color-scheme: dark;
 }
 
 body {
-  background-color: #09090b;
-  color: #f4f4f5;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* Crisp custom scrollbars for monochrome workspace */
+/* Subtle monochrome scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -23,11 +25,15 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #d4d4d8;
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+html.dark ::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
 

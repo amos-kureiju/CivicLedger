@@ -1,10 +1,15 @@
-import { OfflineRedemptionQueueItem, Voucher } from "./types";
+import {
+  ClearinghouseState,
+  OfflineRedemptionQueueItem,
+  Voucher,
+} from "./types";
 
 const DB_NAME = "CivicLedgerOfflineDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_QUEUE = "offline_redemptions";
 const STORE_NONCES = "redeemed_nonces";
 const STORE_VOUCHERS = "cached_vouchers";
+const STORE_STATE = "cached_state";
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -25,11 +30,48 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_VOUCHERS)) {
         db.createObjectStore(STORE_VOUCHERS, { keyPath: "id" });
       }
+      if (!db.objectStoreNames.contains(STORE_STATE)) {
+        db.createObjectStore(STORE_STATE, { keyPath: "key" });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+export async function cacheFullStateInIndexedDB(
+  state: Partial<ClearinghouseState>
+): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_STATE, "readwrite");
+    tx.objectStore(STORE_STATE).put({
+      key: "latest",
+      saved_at: new Date().toISOString(),
+      state,
+    });
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Ignore on SSR
+  }
+}
+
+export async function getCachedFullStateFromIndexedDB(): Promise<Partial<ClearinghouseState> | null> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_STATE, "readonly");
+    const req = tx.objectStore(STORE_STATE).get("latest");
+    return new Promise((resolve) => {
+      req.onsuccess = () => resolve(req.result?.state ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function cacheVouchersInIndexedDB(
@@ -170,12 +212,13 @@ export async function clearAllOfflineStores(): Promise<void> {
   try {
     const db = await openDB();
     const tx = db.transaction(
-      [STORE_QUEUE, STORE_NONCES, STORE_VOUCHERS],
+      [STORE_QUEUE, STORE_NONCES, STORE_VOUCHERS, STORE_STATE],
       "readwrite"
     );
     tx.objectStore(STORE_QUEUE).clear();
     tx.objectStore(STORE_NONCES).clear();
     tx.objectStore(STORE_VOUCHERS).clear();
+    tx.objectStore(STORE_STATE).clear();
     return new Promise((resolve) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();

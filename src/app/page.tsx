@@ -21,12 +21,16 @@ import {
   AlertTriangle,
   X,
   ArrowUpRight,
+  Sun,
+  Moon,
+  BookOpen,
 } from "lucide-react";
 import {
   BackendEngineType,
   BatchSyncResultItem,
   Beneficiary,
   ChainVerificationResult,
+  ClearinghouseState,
   CommodityItem,
   LedgerEntry,
   Merchant,
@@ -45,22 +49,31 @@ import {
   verifyVoucherWebCrypto,
 } from "@/lib/crypto";
 import {
+  cacheFullStateInIndexedDB,
   cacheVouchersInIndexedDB,
   clearAllOfflineStores,
   clearSyncedOfflineRedemptions,
   enqueueOfflineRedemption,
-  getCachedVouchersFromIndexedDB,
+  getCachedFullStateFromIndexedDB,
   getOfflineRedemptionQueue,
   isVoucherRedeemedLocally,
 } from "@/lib/indexeddb";
+import {
+  buildClientFallbackState,
+  DEFAULT_COMMODITY_CATALOG,
+} from "@/lib/client-seed";
 import ReportsComplianceTab from "@/components/ReportsComplianceTab";
+import UserGuideTab from "@/components/UserGuideTab";
 
 type ActiveTab =
   | "COORDINATOR"
   | "BENEFICIARY"
   | "MERCHANT_POS"
   | "CLEARINGHOUSE"
-  | "REPORTS";
+  | "REPORTS"
+  | "GUIDE";
+
+type ThemeMode = "dark" | "light";
 
 interface CryptoVerificationTrace {
   timestamp: string;
@@ -84,28 +97,34 @@ interface CryptoVerificationTrace {
 
 const TAB_META: Record<ActiveTab, { title: string; subtitle: string }> = {
   COORDINATOR: {
-    title: "Organizer Console",
-    subtitle: "Manage community pool, directory, and signed voucher issuance.",
+    title: "Konsol Koordinator",
+    subtitle:
+      "Kelola dana bantuan komunitas, direktori warga/warung, dan penerbitan voucher.",
   },
   BENEFICIARY: {
-    title: "Beneficiary Pass",
+    title: "Kartu Warga",
     subtitle:
-      "Cryptographic QR voucher pass and 6-character SMS fallback code.",
+      "Kartu voucher QR kriptografis dan kode cadangan SMS 6-karakter.",
   },
   MERCHANT_POS: {
-    title: "Merchant Terminal",
+    title: "Terminal Warung",
     subtitle:
-      "Offline-capable browser verification via Web Crypto API and IndexedDB.",
+      "Verifikasi browser berkemampuan offline menggunakan Web Crypto API dan IndexedDB.",
   },
   CLEARINGHOUSE: {
-    title: "Clearinghouse & Ledger",
+    title: "Kliring & Buku Besar",
     subtitle:
-      "Merchant settlement queue, SHA-256 hash chain, and sync reconciliation.",
+      "Antrean pencairan warung, rantai hash SHA-256, dan log rekonsiliasi sinkronisasi.",
   },
   REPORTS: {
-    title: "Reports & Audit",
+    title: "Laporan & Audit",
     subtitle:
-      "Allocation analytics, CSV/JSON exports, and STACK 2026 disclosures.",
+      "Analitik penyaluran, ekspor CSV/JSON, dan keterbukaan ruang lingkup STACK 2026.",
+  },
+  GUIDE: {
+    title: "Panduan Pengguna",
+    subtitle:
+      "Panduan visual langkah demi langkah dan foto referensi untuk setiap fitur.",
   },
 };
 
@@ -119,7 +138,7 @@ function formatRupiah(amount: number): string {
 
 function formatDateTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleString("en-GB", {
+    return new Date(iso).toLocaleString("id-ID", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -131,8 +150,22 @@ function formatDateTime(iso: string): string {
   }
 }
 
+function formatStatusLabel(status: VoucherStatus): string {
+  switch (status) {
+    case "ACTIVE":
+      return "Aktif";
+    case "REDEEMED":
+      return "Ditukar";
+    case "SETTLED":
+      return "Cair";
+    case "EXPIRED":
+      return "Kedaluwarsa";
+  }
+}
+
 export default function CivicLedgerApp() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("COORDINATOR");
+  const [theme, setTheme] = useState<ThemeMode>("dark");
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [swRegistered, setSwRegistered] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -143,7 +176,7 @@ export default function CivicLedgerApp() {
     text: string;
   } | null>(null);
 
-  // Clearinghouse State
+  // State Kliring
   const [poolTotalIdr, setPoolTotalIdr] = useState<number>(8500000);
   const [fraudBlockedCount, setFraudBlockedCount] = useState<number>(0);
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
@@ -156,9 +189,11 @@ export default function CivicLedgerApp() {
   const [reconciliationLogs, setReconciliationLogs] = useState<
     ReconciliationLog[]
   >([]);
-  const [catalog, setCatalog] = useState<CommodityItem[]>([]);
+  const [catalog, setCatalog] = useState<CommodityItem[]>(
+    DEFAULT_COMMODITY_CATALOG
+  );
 
-  // IndexedDB Offline Queue & Sync State
+  // Antrean Offline IndexedDB & Sinkronisasi
   const [offlineQueue, setOfflineQueue] = useState<
     OfflineRedemptionQueueItem[]
   >([]);
@@ -167,12 +202,12 @@ export default function CivicLedgerApp() {
     BatchSyncResultItem[] | null
   >(null);
 
-  // Hash-Chain Verification State
+  // Verifikasi Rantai Hash
   const [chainCheckResult, setChainCheckResult] =
     useState<ChainVerificationResult | null>(null);
   const [isVerifyingChain, setIsVerifyingChain] = useState<boolean>(false);
 
-  // Organizer Form State
+  // Form Koordinator
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] =
     useState<string>("WGA-0401");
   const [selectedCommodityCode, setSelectedCommodityCode] =
@@ -183,7 +218,7 @@ export default function CivicLedgerApp() {
     "ALL" | VoucherStatus
   >("ALL");
 
-  // Directory Inline Forms
+  // Form Registrasi Warga & Warung
   const [showAddResidentForm, setShowAddResidentForm] =
     useState<boolean>(false);
   const [newResidentName, setNewResidentName] = useState<string>("");
@@ -191,10 +226,10 @@ export default function CivicLedgerApp() {
     "RT 04 / RW 08 Coblong, Bandung"
   );
   const [newResidentCategory, setNewResidentCategory] = useState<string>(
-    "Verified Vulnerable Household"
+    "Keluarga Rentan Terverifikasi"
   );
   const [newResidentPhone, setNewResidentPhone] = useState<string>(
-    "0812-3456-7890 (SMS / Mobile Web)"
+    "0812-3456-7890 (SMS / Web Ponsel)"
   );
 
   const [showAddMerchantForm, setShowAddMerchantForm] =
@@ -205,10 +240,10 @@ export default function CivicLedgerApp() {
     "RT 03 / RW 08 Coblong, Bandung"
   );
   const [newMerchantBank, setNewMerchantBank] = useState<string>(
-    "BRI Micro / QRIS •• 5510"
+    "BRI Mikro / QRIS •• 5510"
   );
 
-  // Beneficiary Wallet State
+  // State Kartu Warga
   const [walletBeneficiaryId, setWalletBeneficiaryId] =
     useState<string>("WGA-0401");
   const [selectedVoucherForQR, setSelectedVoucherForQR] =
@@ -216,7 +251,7 @@ export default function CivicLedgerApp() {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [copiedSms, setCopiedSms] = useState<boolean>(false);
 
-  // Merchant POS State
+  // State Terminal Warung
   const [activeMerchantId, setActiveMerchantId] = useState<string>("WRG-01");
   const [scannerInputCode, setScannerInputCode] = useState<string>("");
   const [scannedQRPayloadRaw, setScannedQRPayloadRaw] = useState<string>("");
@@ -236,35 +271,91 @@ export default function CivicLedgerApp() {
     []
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("civicledger_theme");
+    const initial: ThemeMode = saved === "light" ? "light" : "dark";
+    setTheme(initial);
+    document.documentElement.classList.toggle("dark", initial === "dark");
+  }, []);
+
+  const updateTheme = (next: ThemeMode) => {
+    setTheme(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("civicledger_theme", next);
+      document.documentElement.classList.toggle("dark", next === "dark");
+    }
+  };
+
   const applyServerState = useCallback(
-    async (data: {
-      pool_total_idr?: number;
-      fraud_blocked_count?: number;
-      beneficiaries?: Beneficiary[];
-      merchants?: Merchant[];
-      vouchers?: Voucher[];
-      ledger?: LedgerEntry[];
-      settlement_batches?: SettlementBatch[];
-      reconciliation_logs?: ReconciliationLog[];
-      commodity_catalog?: CommodityItem[];
-      backend_engine?: BackendEngineType;
-    }) => {
+    async (data: Partial<ClearinghouseState>, persistToIdb = true) => {
       if (typeof data.pool_total_idr === "number")
         setPoolTotalIdr(data.pool_total_idr);
       if (typeof data.fraud_blocked_count === "number")
         setFraudBlockedCount(data.fraud_blocked_count);
-      if (data.beneficiaries) setBeneficiaries(data.beneficiaries);
-      if (data.merchants) setMerchants(data.merchants);
-      if (data.vouchers) {
-        setVouchers(data.vouchers);
-        await cacheVouchersInIndexedDB(data.vouchers);
+
+      if (Array.isArray(data.beneficiaries) && data.beneficiaries.length > 0) {
+        setBeneficiaries(data.beneficiaries);
+        setSelectedBeneficiaryId((prev) =>
+          data.beneficiaries!.some((b) => b.id === prev)
+            ? prev
+            : data.beneficiaries![0].id
+        );
+        setWalletBeneficiaryId((prev) =>
+          data.beneficiaries!.some((b) => b.id === prev)
+            ? prev
+            : data.beneficiaries![0].id
+        );
       }
-      if (data.ledger) setLedger(data.ledger);
-      if (data.settlement_batches) setSettlementBatches(data.settlement_batches);
-      if (data.reconciliation_logs)
+
+      if (Array.isArray(data.merchants) && data.merchants.length > 0) {
+        setMerchants(data.merchants);
+        setActiveMerchantId((prev) =>
+          data.merchants!.some((m) => m.id === prev)
+            ? prev
+            : data.merchants![0].id
+        );
+      }
+
+      if (Array.isArray(data.vouchers)) {
+        setVouchers(data.vouchers);
+        if (persistToIdb) {
+          await cacheVouchersInIndexedDB(data.vouchers);
+        }
+      }
+
+      if (Array.isArray(data.ledger)) setLedger(data.ledger);
+      if (Array.isArray(data.settlement_batches))
+        setSettlementBatches(data.settlement_batches);
+      if (Array.isArray(data.reconciliation_logs))
         setReconciliationLogs(data.reconciliation_logs);
-      if (data.commodity_catalog) setCatalog(data.commodity_catalog);
+
+      const resolvedCatalog =
+        Array.isArray(data.commodity_catalog) &&
+        data.commodity_catalog.length > 0
+          ? data.commodity_catalog
+          : DEFAULT_COMMODITY_CATALOG;
+      setCatalog(resolvedCatalog);
+      setSelectedCommodityCode((prev) =>
+        resolvedCatalog.some((c) => c.code === prev)
+          ? prev
+          : resolvedCatalog[0].code
+      );
+
       if (data.backend_engine) setBackendEngine(data.backend_engine);
+
+      if (
+        persistToIdb &&
+        Array.isArray(data.beneficiaries) &&
+        data.beneficiaries.length > 0 &&
+        Array.isArray(data.merchants) &&
+        data.merchants.length > 0
+      ) {
+        await cacheFullStateInIndexedDB({
+          ...data,
+          commodity_catalog: resolvedCatalog,
+        });
+      }
     },
     []
   );
@@ -282,7 +373,7 @@ export default function CivicLedgerApp() {
       const handleOnline = () => {
         showToast(
           "info",
-          "Network connection restored. Sync queued transactions when ready."
+          "Koneksi internet kembali aktif. Sinkronkan antrean offline jika tersedia."
         );
       };
       window.addEventListener("offline", handleOffline);
@@ -297,14 +388,35 @@ export default function CivicLedgerApp() {
   const fetchClearinghouseState = useCallback(async () => {
     try {
       const res = await fetch("/api/clearinghouse", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load clearinghouse state");
-      const data = await res.json();
-      await applyServerState(data);
+      if (!res.ok) throw new Error("Gagal memuat data kliring");
+      const data = (await res.json()) as Partial<ClearinghouseState>;
+
+      if (
+        !Array.isArray(data.beneficiaries) ||
+        data.beneficiaries.length === 0 ||
+        !Array.isArray(data.merchants) ||
+        data.merchants.length === 0
+      ) {
+        throw new Error("Payload state API tidak lengkap");
+      }
+
+      await applyServerState(data, true);
       const q = await getOfflineRedemptionQueue();
       setOfflineQueue(q);
     } catch {
-      const cached = await getCachedVouchersFromIndexedDB();
-      if (cached.length > 0) setVouchers(cached);
+      const cachedFull = await getCachedFullStateFromIndexedDB();
+      if (
+        cachedFull &&
+        Array.isArray(cachedFull.beneficiaries) &&
+        cachedFull.beneficiaries.length > 0 &&
+        Array.isArray(cachedFull.merchants) &&
+        cachedFull.merchants.length > 0
+      ) {
+        await applyServerState(cachedFull, false);
+      } else {
+        const fallback = await buildClientFallbackState();
+        await applyServerState(fallback, true);
+      }
       const q = await getOfflineRedemptionQueue();
       setOfflineQueue(q);
     } finally {
@@ -336,7 +448,6 @@ export default function CivicLedgerApp() {
     }
   }, [walletBeneficiaryId, vouchers, selectedVoucherForQR?.id]);
 
-  // High-contrast monochrome QR code (#09090b on #ffffff)
   useEffect(() => {
     if (!selectedVoucherForQR) {
       setQrDataUrl("");
@@ -407,12 +518,12 @@ export default function CivicLedgerApp() {
                   stopCamera();
                   showToast(
                     "success",
-                    `Captured QR token ${decoded.code}. Ready for verification.`
+                    `Token QR ${decoded.code} terbaca dari kamera. Siap diverifikasi.`
                   );
                 }
               }
             } catch {
-              // Ignore frame error
+              // Abaikan error frame sementara
             }
           }, 500);
         }
@@ -420,19 +531,19 @@ export default function CivicLedgerApp() {
     } catch {
       showToast(
         "warning",
-        "Camera permission unavailable. Select a voucher below or enter the 6-character code manually."
+        "Izin kamera tidak tersedia. Pilih voucher di daftar cepat atau ketik kode 6-karakter secara manual."
       );
     }
   };
 
-  // ==================== ACTIONS ====================
+  // ==================== AKSI UTAMA ====================
 
   const handleIssueVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isOfflineMode) {
       showToast(
         "warning",
-        "Issuing new vouchers requires connectivity. Switch to Online mode (Merchant POS remains offline-capable)."
+        "Penerbitan voucher baru memerlukan koneksi. Ubah ke mode Online (Terminal Warung tetap berjalan 100% offline)."
       );
       return;
     }
@@ -448,7 +559,7 @@ export default function CivicLedgerApp() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to issue voucher");
+      if (!res.ok) throw new Error(data.error || "Gagal menerbitkan voucher");
 
       await applyServerState(data.state);
       setWalletBeneficiaryId(selectedBeneficiaryId);
@@ -456,10 +567,13 @@ export default function CivicLedgerApp() {
 
       showToast(
         "success",
-        `Issued voucher ${data.voucher.short_code} (${data.voucher.commodity_name}) for ${data.voucher.beneficiary_name}.`
+        `Voucher ${data.voucher.short_code} (${data.voucher.commodity_name}) berhasil diterbitkan untuk ${data.voucher.beneficiary_name}.`
       );
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Request failed");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Permintaan gagal"
+      );
     }
   };
 
@@ -467,7 +581,7 @@ export default function CivicLedgerApp() {
     e.preventDefault();
     if (!newResidentName.trim()) return;
     if (isOfflineMode) {
-      showToast("warning", "Switch to Online mode to register beneficiaries.");
+      showToast("warning", "Ubah ke mode Online untuk mendaftarkan warga baru.");
       return;
     }
     try {
@@ -491,10 +605,13 @@ export default function CivicLedgerApp() {
       setShowAddResidentForm(false);
       showToast(
         "success",
-        `Registered beneficiary ${data.beneficiary.name} (${data.beneficiary.id}).`
+        `Warga penerima ${data.beneficiary.name} (${data.beneficiary.id}) berhasil didaftarkan.`
       );
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Request failed");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Permintaan gagal"
+      );
     }
   };
 
@@ -502,7 +619,10 @@ export default function CivicLedgerApp() {
     e.preventDefault();
     if (!newMerchantName.trim() || !newMerchantOwner.trim()) return;
     if (isOfflineMode) {
-      showToast("warning", "Switch to Online mode to register merchants.");
+      showToast(
+        "warning",
+        "Ubah ke mode Online untuk mendaftarkan warung mitra baru."
+      );
       return;
     }
     try {
@@ -526,10 +646,13 @@ export default function CivicLedgerApp() {
       setShowAddMerchantForm(false);
       showToast(
         "success",
-        `Onboarded merchant ${data.merchant.name} (${data.merchant.id}).`
+        `Warung mitra ${data.merchant.name} (${data.merchant.id}) berhasil didaftarkan.`
       );
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Request failed");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Permintaan gagal"
+      );
     }
   };
 
@@ -541,23 +664,26 @@ export default function CivicLedgerApp() {
     setActiveTab("MERCHANT_POS");
     showToast(
       "info",
-      `Loaded ${voucher.short_code} into Merchant Terminal for verification.`
+      `Voucher ${voucher.short_code} dimuat ke Terminal Warung dan siap diverifikasi.`
     );
   };
 
   const handleCopySmsSlip = (voucher: Voucher) => {
-    const text = `[CivicLedger Aid Voucher]\nRecipient: ${voucher.beneficiary_name}\nCode: ${voucher.short_code}\nPackage: ${voucher.commodity_name} (${formatRupiah(voucher.nominal_idr)})\nValid until: ${formatDateTime(voucher.expires_at)}\nPresent this code at any partner Warung.`;
+    const text = `[Voucher Bantuan CivicLedger]\nPenerima: ${voucher.beneficiary_name}\nKode: ${voucher.short_code}\nPaket: ${voucher.commodity_name} (${formatRupiah(voucher.nominal_idr)})\nBerlaku sampai: ${formatDateTime(voucher.expires_at)}\nTunjukkan kode ini di warung mitra terdekat.`;
     navigator.clipboard.writeText(text);
     setCopiedSms(true);
     setTimeout(() => setCopiedSms(false), 2200);
-    showToast("info", `Copied SMS slip for ${voucher.short_code}.`);
+    showToast("info", `Slip SMS untuk voucher ${voucher.short_code} disalin.`);
   };
 
   const handleVerifyAndRedeem = async (simulateTamperFraud = false) => {
     const t0 = performance.now();
     const merchant =
       merchants.find((m) => m.id === activeMerchantId) || merchants[0];
-    if (!merchant) return;
+    if (!merchant) {
+      showToast("error", "Belum ada warung aktif yang dipilih.");
+      return;
+    }
 
     let targetVoucher: Voucher | null = null;
     const decodedQR = scannedQRPayloadRaw
@@ -599,7 +725,7 @@ export default function CivicLedgerApp() {
     if (!targetVoucher) {
       showToast(
         "error",
-        "Enter a valid 6-character code (e.g., CL-8841-K9) or pick a voucher from the list."
+        "Masukkan kode 6-karakter yang valid (misal CL-8841-K9) atau pilih dari daftar cepat."
       );
       return;
     }
@@ -649,11 +775,11 @@ export default function CivicLedgerApp() {
         expiryCheckPassed: expiryPassed,
         mode: isOfflineMode ? "OFFLINE_INDEXEDDB" : "ONLINE",
         errorReason:
-          "HMAC-SHA256 signature mismatch. Altered payload nominal (Rp 500,000) rejected without server round-trip.",
+          "Tanda tangan HMAC-SHA256 tidak cocok. Manipulasi nominal payload (Rp 500.000) langsung ditolak tanpa perlu koneksi server.",
       });
       showToast(
         "error",
-        "Rejected: HMAC-SHA256 verification detected payload tampering."
+        "Ditolak: Verifikasi HMAC-SHA256 mendeteksi manipulasi isi payload."
       );
       return;
     }
@@ -676,17 +802,17 @@ export default function CivicLedgerApp() {
         doubleSpendCheckPassed: false,
         expiryCheckPassed: expiryPassed,
         mode: isOfflineMode ? "OFFLINE_INDEXEDDB" : "ONLINE",
-        errorReason: `Duplicate redemption blocked. Nonce '${targetVoucher.nonce}' is already marked spent in IndexedDB / Ledger.`,
+        errorReason: `Penukaran ganda diblokir. Nonce '${targetVoucher.nonce}' sudah tercatat terpakai di IndexedDB / Buku Besar.`,
       });
       showToast(
         "error",
-        `Duplicate rejected: Voucher ${targetVoucher.short_code} has already been spent.`
+        `Duplikat ditolak: Voucher ${targetVoucher.short_code} sudah pernah ditukarkan.`
       );
       return;
     }
 
     if (!expiryPassed) {
-      showToast("error", `Voucher ${targetVoucher.short_code} has expired.`);
+      showToast("error", `Voucher ${targetVoucher.short_code} sudah kedaluwarsa.`);
       return;
     }
 
@@ -726,7 +852,7 @@ export default function CivicLedgerApp() {
                 ...v,
                 status: "REDEEMED",
                 redeemed_by_merchant_id: merchant.id,
-                redeemed_by_merchant_name: `${merchant.name} (Offline Queue)`,
+                redeemed_by_merchant_name: `${merchant.name} (Antrean Offline)`,
                 redeemed_at: redeemedAtIso,
               }
             : v
@@ -754,7 +880,7 @@ export default function CivicLedgerApp() {
 
       showToast(
         "warning",
-        `Verified offline in ${durationMs} ms. Buffered in IndexedDB (${clientTxId}) awaiting sync.`
+        `Terverifikasi offline dalam ${durationMs} ms. Disimpan di IndexedDB (${clientTxId}) menunggu sinkronisasi.`
       );
       return;
     }
@@ -775,7 +901,7 @@ export default function CivicLedgerApp() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Redemption failed");
+      if (!res.ok) throw new Error(data.error || "Penukaran gagal");
 
       await applyServerState(data.state);
 
@@ -800,10 +926,13 @@ export default function CivicLedgerApp() {
 
       showToast(
         "success",
-        `Committed ${targetVoucher.short_code} at ${merchant.name} (+${formatRupiah(targetVoucher.nominal_idr)}) in ${durationMs} ms.`
+        `Voucher ${targetVoucher.short_code} berhasil ditebus di ${merchant.name} (+${formatRupiah(targetVoucher.nominal_idr)}) dalam ${durationMs} ms.`
       );
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Request failed");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Permintaan gagal"
+      );
     }
   };
 
@@ -840,7 +969,7 @@ export default function CivicLedgerApp() {
       commodity_items: candidate.commodity_items,
       nominal_idr: candidate.nominal_idr,
       merchant_id: altMerchant.id,
-      merchant_name: `${altMerchant.name} (2nd Offline Device)`,
+      merchant_name: `${altMerchant.name} (Perangkat Offline ke-2)`,
       hmac_signature: candidate.hmac_signature,
       local_receipt_hash: receiptHash,
       redeemed_at: nowIso,
@@ -855,7 +984,7 @@ export default function CivicLedgerApp() {
 
     showToast(
       "warning",
-      `Queued simulated duplicate claim for ${candidate.short_code} from ${altMerchant.name}. Run Batch Sync to test reconciliation.`
+      `Simulasi klaim duplikat untuk ${candidate.short_code} dari ${altMerchant.name} masuk antrean. Klik Sinkron & Rekonsiliasi Batch untuk menguji penolakan server.`
     );
   };
 
@@ -872,7 +1001,7 @@ export default function CivicLedgerApp() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Batch sync failed");
+      if (!res.ok) throw new Error(data.error || "Sinkronisasi batch gagal");
 
       await clearSyncedOfflineRedemptions();
       setOfflineQueue([]);
@@ -885,10 +1014,13 @@ export default function CivicLedgerApp() {
 
       showToast(
         conflicts > 0 ? "warning" : "success",
-        `Reconciliation complete: ${synced} committed, ${conflicts} duplicate conflict(s) rejected and logged.`
+        `Rekonsiliasi selesai: ${synced} transaksi sah dicatat, ${conflicts} konflik duplikat otomatis ditolak dan dicatat di log.`
       );
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Sync failed");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Sinkronisasi gagal"
+      );
     } finally {
       setIsSyncingBatch(false);
     }
@@ -896,7 +1028,10 @@ export default function CivicLedgerApp() {
 
   const handleSettleMerchants = async (merchantId?: string) => {
     if (isOfflineMode) {
-      showToast("warning", "Switch to Online mode to run batch settlements.");
+      showToast(
+        "warning",
+        "Ubah ke mode Online untuk menjalankan pencairan batch warung."
+      );
       return;
     }
     try {
@@ -919,10 +1054,13 @@ export default function CivicLedgerApp() {
       );
       showToast(
         "success",
-        `Settled ${formatRupiah(totalDisbursed)} across ${data.batches.length} merchant(s) (simulated rail).`
+        `Berhasil mencairkan ${formatRupiah(totalDisbursed)} ke ${data.batches.length} warung mitra (jalur transfer simulasi).`
       );
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : "Settlement error");
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Gagal melakukan pencairan"
+      );
     }
   };
 
@@ -942,7 +1080,7 @@ export default function CivicLedgerApp() {
             valid: serverRes.valid && clientRes.valid,
             message:
               serverRes.valid && clientRes.valid
-                ? `${serverRes.message} Verified by server & WebCrypto.`
+                ? `${serverRes.message} Terverifikasi ganda oleh server & WebCrypto.`
                 : serverRes.message || clientRes.message,
           };
         }
@@ -958,16 +1096,16 @@ export default function CivicLedgerApp() {
     const headers = [
       "TX_ID",
       "Client_TX_ID",
-      "Timestamp",
+      "Waktu",
       "Voucher_ID",
-      "Short_Code",
-      "Beneficiary_ID",
-      "Merchant_ID",
-      "Merchant_Name",
-      "Commodity",
+      "Kode_Pendek",
+      "ID_Warga",
+      "ID_Warung",
+      "Nama_Warung",
+      "Komoditas",
       "Nominal_IDR",
-      "Sync_Mode",
-      "Settlement_Batch",
+      "Mode_Sinkron",
+      "Batch_Pencairan",
       "Prev_Hash",
       "Tx_Hash",
     ];
@@ -983,7 +1121,7 @@ export default function CivicLedgerApp() {
       `"${l.commodity_name.replace(/"/g, '""')}"`,
       l.nominal_idr,
       l.sync_mode,
-      l.settlement_batch_id || "PENDING",
+      l.settlement_batch_id || "MENUNGGU",
       l.prev_hash,
       l.tx_hash,
     ]);
@@ -992,26 +1130,26 @@ export default function CivicLedgerApp() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `civicledger-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `civicledger-buku-besar-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast("success", "Exported transaction ledger as CSV.");
+    showToast("success", "Buku besar transaksi berhasil diekspor sebagai CSV.");
   };
 
   const handleExportJson = () => {
     const snapshot = {
-      exported_at: new Date().toISOString(),
-      project: "CivicLedger — Resilient Local Voucher Clearinghouse",
-      team: "Run.exe (STACK 2026 by GDGoC ITB — Case 2)",
-      backend_engine: backendEngine,
-      pool_total_idr: poolTotalIdr,
-      fraud_blocked_count: fraudBlockedCount,
-      beneficiaries,
-      merchants,
-      vouchers,
-      ledger,
-      reconciliation_logs: reconciliationLogs,
-      settlement_batches: settlementBatches,
+      dieksport_pada: new Date().toISOString(),
+      proyek: "CivicLedger — Lembaga Kliring Voucher Bantuan Komunitas",
+      tim: "Run.exe (STACK 2026 by GDGoC ITB — Kasus 2)",
+      mesin_backend: backendEngine,
+      saldo_kas_idr: poolTotalIdr,
+      anomali_diblokir: fraudBlockedCount,
+      warga: beneficiaries,
+      warung: merchants,
+      voucher: vouchers,
+      buku_besar: ledger,
+      log_rekonsiliasi: reconciliationLogs,
+      batch_pencairan: settlementBatches,
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
       type: "application/json",
@@ -1022,7 +1160,7 @@ export default function CivicLedgerApp() {
     a.download = `civicledger-audit-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast("success", "Exported full audit snapshot as JSON.");
+    showToast("success", "Snapshot audit lengkap berhasil diekspor sebagai JSON.");
   };
 
   const handleResetDemo = async () => {
@@ -1033,17 +1171,21 @@ export default function CivicLedgerApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "RESET_DEMO" }),
       });
+      if (!res.ok) throw new Error("API tidak tersedia");
       const data = await res.json();
-      if (data.state) await applyServerState(data.state);
-      setOfflineQueue([]);
-      setCryptoTrace(null);
-      setLastSyncResults(null);
-      setChainCheckResult(null);
-      setIsOfflineMode(false);
-      showToast("info", "Reset to initial synthetic demonstration state.");
+      if (data.state) {
+        await applyServerState(data.state, true);
+      }
     } catch {
-      // Ignore
+      const fallback = await buildClientFallbackState();
+      await applyServerState(fallback, true);
     }
+    setOfflineQueue([]);
+    setCryptoTrace(null);
+    setLastSyncResults(null);
+    setChainCheckResult(null);
+    setIsOfflineMode(false);
+    showToast("info", "Data demo sintetis berhasil dikembalikan ke kondisi awal.");
   };
 
   const activeVouchersCount = vouchers.filter(
@@ -1075,8 +1217,8 @@ export default function CivicLedgerApp() {
     backendEngine === "GO_POSTGRES"
       ? "Go API · PostgreSQL"
       : backendEngine === "GO_LOCAL"
-        ? "Go API · Local"
-        : "Next.js Local";
+        ? "Go API · Lokal"
+        : "Next.js Lokal";
 
   const navItems: Array<{
     id: ActiveTab;
@@ -1087,45 +1229,55 @@ export default function CivicLedgerApp() {
   }> = [
     {
       id: "COORDINATOR",
-      label: "Organizer Console",
+      label: "Konsol Koordinator",
       section: "OPERATIONS",
       icon: LayoutGrid,
     },
     {
       id: "BENEFICIARY",
-      label: "Beneficiary Pass",
+      label: "Kartu Warga",
       section: "OPERATIONS",
       icon: QrCode,
     },
     {
       id: "MERCHANT_POS",
-      label: "Merchant Terminal",
+      label: "Terminal Warung",
       section: "OPERATIONS",
       icon: ScanLine,
       badge: offlineQueue.length > 0 ? offlineQueue.length : undefined,
     },
     {
       id: "CLEARINGHOUSE",
-      label: "Clearinghouse",
+      label: "Kliring & Buku Besar",
       section: "CLEARINGHOUSE",
       icon: Landmark,
     },
     {
       id: "REPORTS",
-      label: "Reports & Audit",
+      label: "Laporan & Audit",
       section: "CLEARINGHOUSE",
       icon: BarChart3,
+    },
+    {
+      id: "GUIDE",
+      label: "Panduan Pengguna",
+      section: "CLEARINGHOUSE",
+      icon: BookOpen,
     },
   ];
 
   return (
-    <div className="min-h-screen flex bg-[#09090B] text-zinc-100">
-      {/* ==================== LEFT NAVIGATION RAIL (DESKTOP) ==================== */}
-      <aside className="no-print hidden lg:flex lg:w-60 lg:flex-col lg:fixed lg:inset-y-0 bg-[#0C0C0E] border-r border-zinc-800/80 z-30">
-        {/* Minimal Monochrome Brand Header */}
-        <div className="h-14 px-5 flex items-center gap-2.5 border-b border-zinc-800/80">
-          <div className="w-6 h-6 rounded-md bg-zinc-100 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-zinc-950" fill="none">
+    <div className="min-h-screen flex bg-[#F7F7F8] text-zinc-900 dark:bg-[#09090B] dark:text-zinc-100">
+      {/* ==================== SIDEBAR NAVIGASI KIRI (DESKTOP) ==================== */}
+      <aside className="no-print hidden lg:flex lg:w-60 lg:flex-col lg:fixed lg:inset-y-0 bg-white dark:bg-[#0C0C0E] border-r border-zinc-200 dark:border-zinc-800/80 z-30">
+        {/* Header Brand */}
+        <div className="h-14 px-5 flex items-center gap-2.5 border-b border-zinc-200 dark:border-zinc-800/80">
+          <div className="w-6 h-6 rounded-md bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center shrink-0">
+            <svg
+              viewBox="0 0 24 24"
+              className="w-3.5 h-3.5 text-white dark:text-zinc-950"
+              fill="none"
+            >
               <path
                 d="M4 7h16M4 12h10M4 17h16"
                 stroke="currentColor"
@@ -1135,16 +1287,16 @@ export default function CivicLedgerApp() {
               <rect x="17" y="10" width="3" height="4" fill="currentColor" />
             </svg>
           </div>
-          <span className="font-semibold text-[14px] tracking-[-0.02em] text-zinc-100">
+          <span className="font-semibold text-[14px] tracking-[-0.02em] text-zinc-900 dark:text-zinc-100">
             CivicLedger
           </span>
         </div>
 
-        {/* Navigation Groups */}
+        {/* Grup Menu Navigasi */}
         <nav className="flex-1 px-3 py-5 space-y-6 overflow-y-auto">
           <div>
-            <p className="px-2.5 mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-              Operations
+            <p className="px-2.5 mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">
+              Operasional
             </p>
             <div className="space-y-0.5">
               {navItems
@@ -1158,18 +1310,22 @@ export default function CivicLedgerApp() {
                       onClick={() => setActiveTab(item.id)}
                       className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[13px] transition ${
                         active
-                          ? "bg-zinc-800/90 text-zinc-50 font-medium"
-                          : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/70"
+                          ? "bg-zinc-100 dark:bg-zinc-800/90 text-zinc-950 dark:text-zinc-50 font-medium"
+                          : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/70"
                       }`}
                     >
                       <span className="flex items-center gap-2.5">
                         <Icon
-                          className={`w-4 h-4 ${active ? "text-zinc-100" : "text-zinc-500"}`}
+                          className={`w-4 h-4 ${
+                            active
+                              ? "text-zinc-900 dark:text-zinc-100"
+                              : "text-zinc-400 dark:text-zinc-500"
+                          }`}
                         />
                         {item.label}
                       </span>
                       {item.badge !== undefined && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded bg-amber-500/20 text-amber-300 tabular-nums">
+                        <span className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 tabular-nums">
                           {item.badge}
                         </span>
                       )}
@@ -1180,8 +1336,8 @@ export default function CivicLedgerApp() {
           </div>
 
           <div>
-            <p className="px-2.5 mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-              Clearinghouse
+            <p className="px-2.5 mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">
+              Kliring &amp; Panduan
             </p>
             <div className="space-y-0.5">
               {navItems
@@ -1195,13 +1351,17 @@ export default function CivicLedgerApp() {
                       onClick={() => setActiveTab(item.id)}
                       className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[13px] transition ${
                         active
-                          ? "bg-zinc-800/90 text-zinc-50 font-medium"
-                          : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/70"
+                          ? "bg-zinc-100 dark:bg-zinc-800/90 text-zinc-950 dark:text-zinc-50 font-medium"
+                          : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/70"
                       }`}
                     >
                       <span className="flex items-center gap-2.5">
                         <Icon
-                          className={`w-4 h-4 ${active ? "text-zinc-100" : "text-zinc-500"}`}
+                          className={`w-4 h-4 ${
+                            active
+                              ? "text-zinc-900 dark:text-zinc-100"
+                              : "text-zinc-400 dark:text-zinc-500"
+                          }`}
                         />
                         {item.label}
                       </span>
@@ -1212,30 +1372,29 @@ export default function CivicLedgerApp() {
           </div>
         </nav>
 
-        {/* Bottom System Panel & Network Switch */}
-        <div className="p-3.5 border-t border-zinc-800/80 space-y-3">
-          {/* Segmented Network Mode Control */}
+        {/* Kontrol Bawah: Mode Koneksi, Tampilan, Mesin & Reset */}
+        <div className="p-3.5 border-t border-zinc-200 dark:border-zinc-800/80 space-y-3">
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500 mb-1.5 px-1">
-              Connectivity Mode
+            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500 mb-1.5 px-1">
+              Mode Koneksi
             </p>
-            <div className="grid grid-cols-2 p-0.5 rounded-lg bg-zinc-950 border border-zinc-800/90 text-[11px] font-medium">
+            <div className="grid grid-cols-2 p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/90 text-[11px] font-medium">
               <button
                 type="button"
                 onClick={() => {
                   if (isOfflineMode) {
                     setIsOfflineMode(false);
-                    showToast("info", "Restored online clearinghouse mode.");
+                    showToast("info", "Kembali ke mode Online kliring.");
                   }
                 }}
                 className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition ${
                   !isOfflineMode
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "text-zinc-500 hover:text-zinc-300"
+                    ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm dark:shadow-none"
+                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                 }`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${!isOfflineMode ? "bg-emerald-400" : "bg-zinc-600"}`}
+                  className={`w-1.5 h-1.5 rounded-full ${!isOfflineMode ? "bg-emerald-500 dark:bg-emerald-400" : "bg-zinc-400 dark:bg-zinc-600"}`}
                 />
                 Online
               </button>
@@ -1246,33 +1405,66 @@ export default function CivicLedgerApp() {
                     setIsOfflineMode(true);
                     showToast(
                       "warning",
-                      "Offline simulation enabled. Verification runs locally via WebCrypto & IndexedDB."
+                      "Simulasi mode Offline aktif. Verifikasi berjalan lokal via WebCrypto & IndexedDB."
                     );
                   }
                 }}
                 className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition ${
                   isOfflineMode
-                    ? "bg-zinc-800 text-amber-300"
-                    : "text-zinc-500 hover:text-zinc-300"
+                    ? "bg-white dark:bg-zinc-800 text-amber-700 dark:text-amber-300 shadow-sm dark:shadow-none"
+                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                 }`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? "bg-amber-400" : "bg-zinc-600"}`}
+                  className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? "bg-amber-500 dark:bg-amber-400" : "bg-zinc-400 dark:bg-zinc-600"}`}
                 />
                 Offline
               </button>
             </div>
           </div>
 
-          {/* Runtime Info */}
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500 mb-1.5 px-1">
+              Tampilan
+            </p>
+            <div className="grid grid-cols-2 p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/90 text-[11px] font-medium">
+              <button
+                type="button"
+                onClick={() => updateTheme("dark")}
+                className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition ${
+                  theme === "dark"
+                    ? "bg-zinc-800 text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                <Moon className="w-3 h-3" />
+                Gelap
+              </button>
+              <button
+                type="button"
+                onClick={() => updateTheme("light")}
+                className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition ${
+                  theme === "light"
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <Sun className="w-3 h-3" />
+                Terang
+              </button>
+            </div>
+          </div>
+
           <div className="px-1 space-y-1 text-[11px] text-zinc-500">
             <div className="flex items-center justify-between">
-              <span>Engine</span>
-              <span className="font-mono text-zinc-300">{engineBadgeText}</span>
+              <span>Mesin</span>
+              <span className="font-mono text-zinc-800 dark:text-zinc-300">
+                {engineBadgeText}
+              </span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Storage</span>
-              <span className="font-mono text-zinc-400">
+              <span>Simpanan</span>
+              <span className="font-mono text-zinc-600 dark:text-zinc-400">
                 IndexedDB{swRegistered ? " · SW" : ""}
               </span>
             </div>
@@ -1281,21 +1473,25 @@ export default function CivicLedgerApp() {
           <button
             type="button"
             onClick={handleResetDemo}
-            className="w-full py-1.5 px-2.5 rounded-lg border border-zinc-800/90 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 text-[11px] font-medium flex items-center justify-center gap-1.5 transition"
+            className="w-full py-1.5 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800/90 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 text-[11px] font-medium flex items-center justify-center gap-1.5 transition"
           >
             <RotateCcw className="w-3 h-3" />
-            Reset Synthetic Data
+            Reset Data Sintetis
           </button>
         </div>
       </aside>
 
-      {/* ==================== MAIN SHELL ==================== */}
+      {/* ==================== AREA UTAMA ==================== */}
       <div className="flex-1 lg:pl-60 flex flex-col min-w-0">
-        {/* Top Utility Header */}
-        <header className="no-print sticky top-0 z-20 h-14 bg-[#09090B]/90 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        {/* Bar Atas */}
+        <header className="no-print sticky top-0 z-20 h-14 bg-[#F7F7F8]/90 dark:bg-[#09090B]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
           <div className="min-w-0 flex items-center gap-3">
-            <div className="lg:hidden w-6 h-6 rounded-md bg-zinc-100 flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-zinc-950" fill="none">
+            <div className="lg:hidden w-6 h-6 rounded-md bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center shrink-0">
+              <svg
+                viewBox="0 0 24 24"
+                className="w-3.5 h-3.5 text-white dark:text-zinc-950"
+                fill="none"
+              >
                 <path
                   d="M4 7h16M4 12h10M4 17h16"
                   stroke="currentColor"
@@ -1306,7 +1502,7 @@ export default function CivicLedgerApp() {
               </svg>
             </div>
             <div className="truncate">
-              <h1 className="text-[14px] font-medium tracking-[-0.015em] text-zinc-100 truncate">
+              <h1 className="text-[14px] font-medium tracking-[-0.015em] text-zinc-950 dark:text-zinc-100 truncate">
                 {TAB_META[activeTab].title}
               </h1>
               <p className="hidden sm:block text-[11px] text-zinc-500 truncate">
@@ -1315,41 +1511,62 @@ export default function CivicLedgerApp() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {offlineQueue.length > 0 && (
               <button
                 onClick={handleSyncOfflineBatch}
                 disabled={isSyncingBatch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-medium transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-medium transition"
               >
                 <RefreshCw
                   className={`w-3.5 h-3.5 ${isSyncingBatch ? "animate-spin" : ""}`}
                 />
                 <span className="tabular-nums">
-                  Sync Queue ({offlineQueue.length})
+                  Sinkron Antrean ({offlineQueue.length})
                 </span>
               </button>
             )}
 
             <button
               type="button"
+              onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}
+              title="Ganti Mode Gelap / Terang"
+              className="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"
+            >
+              {theme === "dark" ? (
+                <Sun className="w-3.5 h-3.5" />
+              ) : (
+                <Moon className="w-3.5 h-3.5" />
+              )}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsOfflineMode(!isOfflineMode)}
-              className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300"
+              className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300"
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? "bg-amber-400" : "bg-emerald-400"}`}
+                className={`w-1.5 h-1.5 rounded-full ${isOfflineMode ? "bg-amber-500" : "bg-emerald-500"}`}
               />
               {isOfflineMode ? "Offline" : "Online"}
             </button>
 
-            <span className="hidden md:inline-block text-[11px] font-mono text-zinc-500">
-              STACK 2026 · Team Run.exe
+            <span
+              title="Seluruh profil warga, warung, dan pencairan adalah data demo sintetis untuk STACK 2026."
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-200/70 dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-800 text-[11px] font-mono text-zinc-700 dark:text-zinc-400"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 dark:bg-zinc-400" />
+              Data Demo Sintetis
+            </span>
+
+            <span className="hidden xl:inline-block text-[11px] font-mono text-zinc-500 pl-1">
+              STACK 2026 · Tim Run.exe
             </span>
           </div>
         </header>
 
-        {/* Mobile Tab Strip */}
-        <div className="no-print lg:hidden border-b border-zinc-800/80 bg-[#0C0C0E] px-4 py-2 flex items-center gap-1 overflow-x-auto">
+        {/* Tab Ponsel */}
+        <div className="no-print lg:hidden border-b border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#0C0C0E] px-4 py-2 flex items-center gap-1 overflow-x-auto">
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
@@ -1358,8 +1575,8 @@ export default function CivicLedgerApp() {
                 onClick={() => setActiveTab(item.id)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition ${
                   active
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "text-zinc-500 hover:text-zinc-300"
+                    ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100"
+                    : "text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
                 }`}
               >
                 {item.label}
@@ -1368,43 +1585,43 @@ export default function CivicLedgerApp() {
           })}
         </div>
 
-        {/* Offline Notice Strip */}
+        {/* Banner Mode Offline */}
         {isOfflineMode && (
-          <div className="no-print bg-amber-500/[0.07] border-b border-amber-500/20 px-4 sm:px-6 lg:px-8 py-2">
-            <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-amber-200/90">
+          <div className="no-print bg-amber-500/10 dark:bg-amber-500/[0.07] border-b border-amber-500/25 px-4 sm:px-6 lg:px-8 py-2">
+            <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-amber-900 dark:text-amber-200/90">
               <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" />
                 <span>
-                  Offline simulation active — Merchant verification runs locally
-                  via <span className="font-mono">crypto.subtle</span> and
-                  buffers in <span className="font-mono">IndexedDB</span>.
+                  Simulasi offline aktif — Verifikasi warung berjalan lokal via{" "}
+                  <span className="font-mono">crypto.subtle</span> dan antrean
+                  disimpan di <span className="font-mono">IndexedDB</span>.
                 </span>
               </div>
               {offlineQueue.length > 0 && (
                 <button
                   onClick={handleSyncOfflineBatch}
-                  className="text-xs font-medium text-amber-300 hover:text-amber-200 underline underline-offset-4 self-start sm:self-auto"
+                  className="text-xs font-medium text-amber-800 dark:text-amber-300 underline underline-offset-4 self-start sm:self-auto"
                 >
-                  Reconnect &amp; Sync ({offlineQueue.length})
+                  Hubungkan &amp; Sinkronkan ({offlineQueue.length})
                 </button>
               )}
             </div>
           </div>
         )}
 
-        {/* Minimal Notification Toast Bar */}
+        {/* Notifikasi Toast */}
         {actionBanner && (
           <div className="no-print px-4 sm:px-6 lg:px-8 pt-4">
-            <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-[#141417] border border-zinc-800 text-xs text-zinc-200">
+            <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-white dark:bg-[#141417] border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     actionBanner.type === "success"
-                      ? "bg-emerald-400"
+                      ? "bg-emerald-500 dark:bg-emerald-400"
                       : actionBanner.type === "warning"
-                        ? "bg-amber-400"
+                        ? "bg-amber-500 dark:bg-amber-400"
                         : actionBanner.type === "error"
-                          ? "bg-rose-400"
+                          ? "bg-rose-500 dark:bg-rose-400"
                           : "bg-zinc-400"
                   }`}
                 />
@@ -1412,8 +1629,8 @@ export default function CivicLedgerApp() {
               </div>
               <button
                 onClick={() => setActionBanner(null)}
-                className="text-zinc-500 hover:text-zinc-300 shrink-0"
-                aria-label="Dismiss notification"
+                className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 shrink-0"
+                aria-label="Tutup notifikasi"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1421,81 +1638,81 @@ export default function CivicLedgerApp() {
           </div>
         )}
 
-        {/* ==================== MAIN WORKSPACE ==================== */}
+        {/* ==================== KONTEN UTAMA ==================== */}
         <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-[1440px] mx-auto">
             {loading ? (
               <div className="py-20 text-center text-xs font-mono text-zinc-500">
-                Initializing clearinghouse state...
+                Memuat data lembaga kliring...
               </div>
             ) : (
               <>
                 {/* ============================================================
-                    VIEW 1: ORGANIZER CONSOLE
+                    TAB 1: KONSOL KOORDINATOR
                    ============================================================ */}
                 {activeTab === "COORDINATOR" && (
                   <div className="space-y-6">
-                    {/* Unified Metric Strip */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-800/80 border border-zinc-800/90 bg-[#111113] rounded-xl overflow-hidden">
+                    {/* Bar Metrik KPI */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200 dark:divide-zinc-800/80 border border-zinc-200 dark:border-zinc-800/90 bg-white dark:bg-[#111113] rounded-xl overflow-hidden">
                       <div className="p-5">
                         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-                          Aid Pool Balance
+                          Saldo Kas Bantuan
                         </p>
-                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
+                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
                           {formatRupiah(poolTotalIdr)}
                         </p>
                         <p className="text-xs text-zinc-500 mt-1">
-                          Commodity-locked mutual aid
+                          Terkunci untuk bantuan pangan pokok
                         </p>
                       </div>
 
                       <div className="p-5">
                         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-                          Active Vouchers
+                          Voucher Aktif
                         </p>
-                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
+                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
                           {activeVouchersCount}
                         </p>
                         <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-                          {vouchers.length} total issued
+                          {vouchers.length} total voucher diterbitkan
                         </p>
                       </div>
 
                       <div className="p-5">
                         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-                          Local Stall Volume
+                          Omzet Warung Lokal
                         </p>
-                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
+                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
                           {formatRupiah(totalWarungTurnover)}
                         </p>
                         <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-                          {merchants.length} participating warungs
+                          {merchants.length} warung mitra terdaftar
                         </p>
                       </div>
 
                       <div className="p-5">
                         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-                          Verified Directory
+                          Direktori Terverifikasi
                         </p>
-                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-50 mt-2">
+                        <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
                           {beneficiaries.length}
                         </p>
                         <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-                          {fraudBlockedCount} anomaly attempt(s) blocked
+                          {fraudBlockedCount} percobaan anomali diblokir
                         </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                      {/* Left: Issue Voucher Panel */}
-                      <div className="lg:col-span-5 bg-[#111113] rounded-xl border border-zinc-800/90 p-5 space-y-5">
-                        <div className="flex items-center justify-between gap-2 pb-4 border-b border-zinc-800/80">
+                      {/* Kiri: Terbitkan Voucher */}
+                      <div className="lg:col-span-5 bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5 space-y-5">
+                        <div className="flex items-center justify-between gap-2 pb-4 border-b border-zinc-200 dark:border-zinc-800/80">
                           <div>
-                            <h2 className="text-sm font-medium text-zinc-100">
-                              Issue Voucher
+                            <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                              Terbitkan Voucher
                             </h2>
                             <p className="text-xs text-zinc-500 mt-0.5">
-                              Generate HMAC-SHA256 signed allowance
+                              Buat alokasi bertanda tangan HMAC-SHA256
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -1505,10 +1722,10 @@ export default function CivicLedgerApp() {
                                 setShowAddResidentForm(!showAddResidentForm);
                                 setShowAddMerchantForm(false);
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-medium text-zinc-300 transition"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[11px] font-medium text-zinc-800 dark:text-zinc-300 transition"
                             >
                               <Plus className="w-3 h-3" />
-                              Resident
+                              Warga
                             </button>
                             <button
                               type="button"
@@ -1516,10 +1733,10 @@ export default function CivicLedgerApp() {
                                 setShowAddMerchantForm(!showAddMerchantForm);
                                 setShowAddResidentForm(false);
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-medium text-zinc-300 transition"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[11px] font-medium text-zinc-800 dark:text-zinc-300 transition"
                             >
                               <Plus className="w-3 h-3" />
-                              Merchant
+                              Warung
                             </button>
                           </div>
                         </div>
@@ -1527,20 +1744,20 @@ export default function CivicLedgerApp() {
                         {showAddResidentForm && (
                           <form
                             onSubmit={handleAddBeneficiary}
-                            className="p-4 rounded-lg bg-[#0C0C0E] border border-zinc-800 space-y-3"
+                            className="p-4 rounded-lg bg-zinc-50 dark:bg-[#0C0C0E] border border-zinc-200 dark:border-zinc-800 space-y-3"
                           >
-                            <p className="text-xs font-medium text-zinc-200">
-                              Register Beneficiary Household
+                            <p className="text-xs font-medium text-zinc-900 dark:text-zinc-200">
+                              Daftarkan Keluarga Penerima Manfaat
                             </p>
                             <input
                               type="text"
                               required
-                              placeholder="Full name (e.g., Pak Hendra Wijaya)"
+                              placeholder="Nama lengkap (misal: Pak Hendra Wijaya)"
                               value={newResidentName}
                               onChange={(e) =>
                                 setNewResidentName(e.target.value)
                               }
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none"
+                              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none"
                             />
                             <div className="grid grid-cols-2 gap-2">
                               <input
@@ -1550,7 +1767,7 @@ export default function CivicLedgerApp() {
                                   setNewResidentRtRw(e.target.value)
                                 }
                                 placeholder="RT / RW"
-                                className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                               />
                               <input
                                 type="text"
@@ -1558,8 +1775,8 @@ export default function CivicLedgerApp() {
                                 onChange={(e) =>
                                   setNewResidentCategory(e.target.value)
                                 }
-                                placeholder="Category"
-                                className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                                placeholder="Kategori"
+                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                               />
                             </div>
                             <input
@@ -1568,22 +1785,22 @@ export default function CivicLedgerApp() {
                               onChange={(e) =>
                                 setNewResidentPhone(e.target.value)
                               }
-                              placeholder="Phone / SMS"
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                              placeholder="Nomor HP / SMS"
+                              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                             />
                             <div className="flex justify-end gap-2">
                               <button
                                 type="button"
                                 onClick={() => setShowAddResidentForm(false)}
-                                className="px-3 py-1.5 rounded-md text-xs text-zinc-400 hover:text-zinc-200"
+                                className="px-3 py-1.5 rounded-md text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                               >
-                                Cancel
+                                Batal
                               </button>
                               <button
                                 type="submit"
-                                className="px-3 py-1.5 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium"
+                                className="px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-medium"
                               >
-                                Save Resident
+                                Simpan Warga
                               </button>
                             </div>
                           </form>
@@ -1592,31 +1809,31 @@ export default function CivicLedgerApp() {
                         {showAddMerchantForm && (
                           <form
                             onSubmit={handleAddMerchant}
-                            className="p-4 rounded-lg bg-[#0C0C0E] border border-zinc-800 space-y-3"
+                            className="p-4 rounded-lg bg-zinc-50 dark:bg-[#0C0C0E] border border-zinc-200 dark:border-zinc-800 space-y-3"
                           >
-                            <p className="text-xs font-medium text-zinc-200">
-                              Onboard Local Merchant (Warung)
+                            <p className="text-xs font-medium text-zinc-900 dark:text-zinc-200">
+                              Daftarkan Warung Mitra Lokal
                             </p>
                             <input
                               type="text"
                               required
-                              placeholder="Stall name (e.g., Warung Sembako Maju)"
+                              placeholder="Nama warung (misal: Warung Sembako Maju)"
                               value={newMerchantName}
                               onChange={(e) =>
                                 setNewMerchantName(e.target.value)
                               }
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none"
+                              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none"
                             />
                             <div className="grid grid-cols-2 gap-2">
                               <input
                                 type="text"
                                 required
-                                placeholder="Owner name"
+                                placeholder="Nama pemilik"
                                 value={newMerchantOwner}
                                 onChange={(e) =>
                                   setNewMerchantOwner(e.target.value)
                                 }
-                                className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none"
+                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none"
                               />
                               <input
                                 type="text"
@@ -1624,8 +1841,8 @@ export default function CivicLedgerApp() {
                                 onChange={(e) =>
                                   setNewMerchantRtRw(e.target.value)
                                 }
-                                placeholder="Location"
-                                className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                                placeholder="Lokasi"
+                                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                               />
                             </div>
                             <input
@@ -1634,22 +1851,22 @@ export default function CivicLedgerApp() {
                               onChange={(e) =>
                                 setNewMerchantBank(e.target.value)
                               }
-                              placeholder="Bank / QRIS account"
-                              className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                              placeholder="Rekening Bank / QRIS"
+                              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                             />
                             <div className="flex justify-end gap-2">
                               <button
                                 type="button"
                                 onClick={() => setShowAddMerchantForm(false)}
-                                className="px-3 py-1.5 rounded-md text-xs text-zinc-400 hover:text-zinc-200"
+                                className="px-3 py-1.5 rounded-md text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
                               >
-                                Cancel
+                                Batal
                               </button>
                               <button
                                 type="submit"
-                                className="px-3 py-1.5 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium"
+                                className="px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-medium"
                               >
-                                Save Merchant
+                                Simpan Warung
                               </button>
                             </div>
                           </form>
@@ -1658,14 +1875,14 @@ export default function CivicLedgerApp() {
                         <form onSubmit={handleIssueVoucher} className="space-y-4">
                           <div>
                             <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mb-1.5">
-                              Beneficiary
+                              Penerima Manfaat
                             </label>
                             <select
                               value={selectedBeneficiaryId}
                               onChange={(e) =>
                                 setSelectedBeneficiaryId(e.target.value)
                               }
-                              className="w-full px-3 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                              className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                             >
                               {beneficiaries.map((b) => (
                                 <option key={b.id} value={b.id}>
@@ -1677,7 +1894,7 @@ export default function CivicLedgerApp() {
 
                           <div>
                             <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mb-1.5">
-                              Commodity Package
+                              Paket Komoditas Pangan
                             </label>
                             <div className="space-y-1.5">
                               {catalog.map((item) => {
@@ -1688,8 +1905,8 @@ export default function CivicLedgerApp() {
                                     key={item.code}
                                     className={`flex items-start justify-between gap-3 p-3 rounded-lg border cursor-pointer transition ${
                                       selected
-                                        ? "bg-zinc-900 border-zinc-500"
-                                        : "bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700"
+                                        ? "bg-zinc-100/90 dark:bg-zinc-900 border-zinc-900 dark:border-zinc-500"
+                                        : "bg-zinc-50/70 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-400 dark:hover:border-zinc-700"
                                     }`}
                                   >
                                     <div className="flex items-start gap-2.5 min-w-0">
@@ -1701,10 +1918,10 @@ export default function CivicLedgerApp() {
                                         onChange={() =>
                                           setSelectedCommodityCode(item.code)
                                         }
-                                        className="mt-0.5 accent-zinc-100"
+                                        className="mt-0.5 accent-zinc-900 dark:accent-zinc-100"
                                       />
                                       <div className="min-w-0">
-                                        <p className="text-xs font-medium text-zinc-100">
+                                        <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
                                           {item.name}
                                         </p>
                                         <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
@@ -1712,7 +1929,7 @@ export default function CivicLedgerApp() {
                                         </p>
                                       </div>
                                     </div>
-                                    <span className="font-mono text-xs text-zinc-200 tabular-nums whitespace-nowrap">
+                                    <span className="font-mono text-xs text-zinc-800 dark:text-zinc-200 tabular-nums whitespace-nowrap">
                                       {formatRupiah(item.nominal_idr)}
                                     </span>
                                   </label>
@@ -1723,82 +1940,87 @@ export default function CivicLedgerApp() {
 
                           <div>
                             <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mb-1.5">
-                              Validity Window
+                              Masa Berlaku
                             </label>
                             <select
                               value={validityHours}
                               onChange={(e) =>
                                 setValidityHours(Number(e.target.value))
                               }
-                              className="w-full px-3 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                              className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                             >
-                              <option value={24}>24 Hours · Emergency</option>
-                              <option value={72}>72 Hours · Standard</option>
-                              <option value={168}>7 Days · Weekly</option>
+                              <option value={24}>24 Jam · Bantuan Darurat</option>
+                              <option value={72}>72 Jam · Standar RT/RW</option>
+                              <option value={168}>7 Hari · Alokasi Mingguan</option>
                             </select>
                           </div>
 
                           <button
                             type="submit"
-                            className="w-full py-2.5 px-4 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs transition"
+                            className="w-full py-2.5 px-4 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs transition"
                           >
-                            Issue &amp; Sign Voucher
+                            Terbitkan &amp; Tandatangani Voucher
                           </button>
 
                           <p className="text-[11px] text-zinc-500 leading-relaxed">
-                            Signed with single-use nonce and HMAC-SHA256 for
-                            offline browser verification.
+                            Dilengkapi nonce sekali pakai dan tanda tangan
+                            HMAC-SHA256 agar bisa diverifikasi offline di browser
+                            warung.
                           </p>
                         </form>
                       </div>
 
-                      {/* Right: Allocation Registry Table */}
-                      <div className="lg:col-span-7 bg-[#111113] rounded-xl border border-zinc-800/90 overflow-hidden">
-                        <div className="p-5 border-b border-zinc-800/80 space-y-3">
+                      {/* Kanan: Registri Alokasi */}
+                      <div className="lg:col-span-7 bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 overflow-hidden">
+                        <div className="p-5 border-b border-zinc-200 dark:border-zinc-800/80 space-y-3">
                           <div className="flex items-center justify-between gap-2">
                             <div>
-                              <h2 className="text-sm font-medium text-zinc-100">
-                                Allocation Registry
+                              <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                                Registri Alokasi Voucher
                               </h2>
                               <p className="text-xs text-zinc-500 mt-0.5">
-                                Track issued vouchers across their lifecycle
+                                Pantau seluruh voucher dari penerbitan hingga
+                                pencairan
                               </p>
                             </div>
                             <span className="font-mono text-[11px] text-zinc-500 tabular-nums">
-                              {filteredVouchers.length} records
+                              {filteredVouchers.length} data
                             </span>
                           </div>
 
                           <div className="flex flex-col sm:flex-row gap-2">
                             <div className="relative flex-1">
-                              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
+                              <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 absolute left-3 top-2.5" />
                               <input
                                 type="text"
                                 value={voucherSearch}
                                 onChange={(e) =>
                                   setVoucherSearch(e.target.value)
                                 }
-                                placeholder="Filter by code, beneficiary, or commodity..."
-                                className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none"
+                                placeholder="Cari kode, nama warga, atau paket komoditas..."
+                                className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none"
                               />
                             </div>
-                            <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                            <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
                               {(
-                                ["ALL", "ACTIVE", "REDEEMED", "SETTLED"] as const
+                                [
+                                  { id: "ALL", label: "Semua" },
+                                  { id: "ACTIVE", label: "Aktif" },
+                                  { id: "REDEEMED", label: "Ditukar" },
+                                  { id: "SETTLED", label: "Cair" },
+                                ] as const
                               ).map((st) => (
                                 <button
-                                  key={st}
+                                  key={st.id}
                                   type="button"
-                                  onClick={() => setVoucherStatusFilter(st)}
+                                  onClick={() => setVoucherStatusFilter(st.id)}
                                   className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${
-                                    voucherStatusFilter === st
-                                      ? "bg-zinc-800 text-zinc-100"
-                                      : "text-zinc-500 hover:text-zinc-300"
+                                    voucherStatusFilter === st.id
+                                      ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm dark:shadow-none"
+                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                                   }`}
                                 >
-                                  {st === "ALL"
-                                    ? "All"
-                                    : st.charAt(0) + st.slice(1).toLowerCase()}
+                                  {st.label}
                                 </button>
                               ))}
                             </div>
@@ -1808,24 +2030,24 @@ export default function CivicLedgerApp() {
                         <div className="overflow-x-auto">
                           <table className="w-full text-left border-collapse">
                             <thead>
-                              <tr className="border-b border-zinc-800/80 text-[10px] font-medium uppercase tracking-[0.06em] text-zinc-500 bg-[#0E0E10]">
-                                <th className="py-2.5 pl-5 pr-3">Code</th>
-                                <th className="py-2.5 px-3">Beneficiary</th>
-                                <th className="py-2.5 px-3">Package</th>
+                              <tr className="border-b border-zinc-200 dark:border-zinc-800/80 text-[10px] font-medium uppercase tracking-[0.06em] text-zinc-500 bg-zinc-50 dark:bg-[#0E0E10]">
+                                <th className="py-2.5 pl-5 pr-3">Kode</th>
+                                <th className="py-2.5 px-3">Penerima</th>
+                                <th className="py-2.5 px-3">Paket</th>
                                 <th className="py-2.5 px-3">Status</th>
                                 <th className="py-2.5 pl-3 pr-5 text-right">
-                                  Action
+                                  Aksi
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-zinc-800/60 text-xs">
+                            <tbody className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 text-xs">
                               {filteredVouchers.map((v) => (
                                 <tr
                                   key={v.id}
-                                  className="hover:bg-zinc-900/40 transition"
+                                  className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition"
                                 >
                                   <td className="py-3.5 pl-5 pr-3 whitespace-nowrap">
-                                    <span className="font-mono font-medium text-zinc-100">
+                                    <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
                                       {v.short_code}
                                     </span>
                                     <div className="text-[10px] font-mono text-zinc-500 mt-0.5">
@@ -1833,7 +2055,7 @@ export default function CivicLedgerApp() {
                                     </div>
                                   </td>
                                   <td className="py-3.5 px-3">
-                                    <div className="font-medium text-zinc-200">
+                                    <div className="font-medium text-zinc-900 dark:text-zinc-200">
                                       {v.beneficiary_name}
                                     </div>
                                     <div className="text-[11px] text-zinc-500">
@@ -1841,32 +2063,28 @@ export default function CivicLedgerApp() {
                                     </div>
                                   </td>
                                   <td className="py-3.5 px-3">
-                                    <div className="text-zinc-200">
+                                    <div className="text-zinc-800 dark:text-zinc-200">
                                       {v.commodity_name}
                                     </div>
-                                    <div className="font-mono text-[11px] text-zinc-400 tabular-nums mt-0.5">
+                                    <div className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums mt-0.5">
                                       {formatRupiah(v.nominal_idr)}
                                     </div>
                                   </td>
-                                  <td className="py-3.5 px-3 whitespace-nowrap">
-                                    <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-300">
+                                  <td className="py-3.5 px-3">
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-800 dark:text-zinc-300 whitespace-nowrap">
                                       <span
                                         className={`w-1.5 h-1.5 rounded-full ${
                                           v.status === "ACTIVE"
-                                            ? "bg-emerald-400"
+                                            ? "bg-emerald-500 dark:bg-emerald-400"
                                             : v.status === "REDEEMED"
-                                              ? "bg-amber-400"
+                                              ? "bg-amber-500 dark:bg-amber-400"
                                               : "bg-zinc-400"
                                         }`}
                                       />
-                                      {v.status === "ACTIVE"
-                                        ? "Active"
-                                        : v.status === "REDEEMED"
-                                          ? "Redeemed"
-                                          : "Settled"}
+                                      {formatStatusLabel(v.status)}
                                     </span>
                                     {v.redeemed_by_merchant_name && (
-                                      <div className="text-[10px] text-zinc-500 mt-0.5 truncate max-w-[130px]">
+                                      <div className="text-[11px] text-zinc-500 mt-0.5 max-w-[230px] leading-snug">
                                         {v.redeemed_by_merchant_name}
                                       </div>
                                     )}
@@ -1878,18 +2096,18 @@ export default function CivicLedgerApp() {
                                         setSelectedVoucherForQR(v);
                                         setActiveTab("BENEFICIARY");
                                       }}
-                                      className="px-2.5 py-1 rounded-md border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-[11px] font-medium transition"
+                                      className="px-2.5 py-1 rounded-md border border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[11px] font-medium transition"
                                     >
-                                      Pass
+                                      Kartu
                                     </button>
                                     {v.status === "ACTIVE" && (
                                       <button
                                         onClick={() =>
                                           sendVoucherToMerchantScanner(v)
                                         }
-                                        className="px-2.5 py-1 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-[11px] font-medium transition"
+                                        className="px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-[11px] font-medium transition"
                                       >
-                                        Redeem
+                                        Tukar
                                       </button>
                                     )}
                                   </td>
@@ -1901,7 +2119,7 @@ export default function CivicLedgerApp() {
                                     colSpan={5}
                                     className="py-10 text-center text-zinc-500 text-xs"
                                   >
-                                    No vouchers match the current filter.
+                                    Tidak ada voucher yang sesuai dengan filter.
                                   </td>
                                 </tr>
                               )}
@@ -1914,22 +2132,21 @@ export default function CivicLedgerApp() {
                 )}
 
                 {/* ============================================================
-                    VIEW 2: BENEFICIARY PASS
+                    TAB 2: KARTU WARGA
                    ============================================================ */}
                 {activeTab === "BENEFICIARY" && (
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    {/* Left: Profile & Voucher Selector */}
-                    <div className="no-print lg:col-span-5 bg-[#111113] rounded-xl border border-zinc-800/90 p-5 space-y-5">
+                    <div className="no-print lg:col-span-5 bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5 space-y-5">
                       <div>
                         <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mb-1.5">
-                          Beneficiary Household
+                          Keluarga Penerima Manfaat
                         </label>
                         <select
                           value={walletBeneficiaryId}
                           onChange={(e) =>
                             setWalletBeneficiaryId(e.target.value)
                           }
-                          className="w-full px-3 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                          className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                         >
                           {beneficiaries.map((b) => (
                             <option key={b.id} value={b.id}>
@@ -1941,7 +2158,7 @@ export default function CivicLedgerApp() {
 
                       <div className="space-y-2">
                         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-                          Assigned Vouchers
+                          Daftar Voucher Milik Warga
                         </p>
                         {vouchers
                           .filter(
@@ -1956,37 +2173,37 @@ export default function CivicLedgerApp() {
                                 onClick={() => setSelectedVoucherForQR(v)}
                                 className={`w-full text-left p-4 rounded-lg border transition ${
                                   isSelected
-                                    ? "bg-zinc-900 border-zinc-500"
-                                    : "bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700"
+                                    ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-900 dark:border-zinc-500"
+                                    : "bg-zinc-50/70 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-400 dark:hover:border-zinc-700"
                                 }`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="font-mono text-xs font-medium text-zinc-100">
+                                  <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">
                                     {v.short_code}
                                   </span>
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
                                     <span
                                       className={`w-1.5 h-1.5 rounded-full ${
                                         v.status === "ACTIVE"
-                                          ? "bg-emerald-400"
-                                          : "bg-zinc-500"
+                                          ? "bg-emerald-500 dark:bg-emerald-400"
+                                          : "bg-zinc-400 dark:bg-zinc-500"
                                       }`}
                                     />
-                                    {v.status}
+                                    {formatStatusLabel(v.status)}
                                   </span>
                                 </div>
-                                <p className="text-xs font-medium text-zinc-200 mt-2">
+                                <p className="text-xs font-medium text-zinc-900 dark:text-zinc-200 mt-2">
                                   {v.commodity_name}
                                 </p>
                                 <p className="text-[11px] text-zinc-500 mt-0.5">
                                   {v.commodity_items}
                                 </p>
-                                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-zinc-800/80 text-[11px] font-mono tabular-nums">
-                                  <span className="text-zinc-200">
+                                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800/80 text-[11px] font-mono tabular-nums">
+                                  <span className="text-zinc-900 dark:text-zinc-200">
                                     {formatRupiah(v.nominal_idr)}
                                   </span>
                                   <span className="text-zinc-500">
-                                    Exp {formatDateTime(v.expires_at)}
+                                    Berlaku s/d {formatDateTime(v.expires_at)}
                                   </span>
                                 </div>
                               </button>
@@ -1995,87 +2212,83 @@ export default function CivicLedgerApp() {
                       </div>
                     </div>
 
-                    {/* Right: Monochrome Architectural Voucher Pass */}
+                    {/* Kanan: Kartu Voucher */}
                     <div className="lg:col-span-7 flex justify-center">
                       {selectedVoucherForQR ? (
-                        <div className="w-full max-w-md bg-[#111113] rounded-xl border border-zinc-800 overflow-hidden">
-                          {/* Pass Header */}
-                          <div className="p-5 bg-[#161619] border-b border-zinc-800/90 flex items-start justify-between gap-3">
+                        <div className="w-full max-w-md bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm dark:shadow-none">
+                          <div className="p-5 bg-zinc-50 dark:bg-[#161619] border-b border-zinc-200 dark:border-zinc-800/90 flex items-start justify-between gap-3">
                             <div>
                               <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-zinc-500">
-                                CivicLedger · Voucher Pass
+                                CivicLedger · Kartu Voucher
                               </p>
-                              <h3 className="text-base font-semibold tracking-[-0.015em] text-zinc-50 mt-1">
+                              <h3 className="text-base font-semibold tracking-[-0.015em] text-zinc-950 dark:text-zinc-50 mt-1">
                                 {selectedVoucherForQR.beneficiary_name}
                               </h3>
-                              <p className="text-xs text-zinc-400 mt-0.5">
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                                 {selectedVoucherForQR.rt_rw}
                               </p>
                             </div>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-300">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono text-zinc-700 dark:text-zinc-300">
                               <span
                                 className={`w-1.5 h-1.5 rounded-full ${
                                   selectedVoucherForQR.status === "ACTIVE"
-                                    ? "bg-emerald-400"
-                                    : "bg-zinc-500"
+                                    ? "bg-emerald-500 dark:bg-emerald-400"
+                                    : "bg-zinc-400 dark:bg-zinc-500"
                                 }`}
                               />
-                              {selectedVoucherForQR.status}
+                              {formatStatusLabel(selectedVoucherForQR.status)}
                             </span>
                           </div>
 
-                          {/* Pass Body */}
                           <div className="p-6 space-y-5">
                             <div className="flex items-baseline justify-between gap-4">
                               <div>
-                                <p className="text-xs font-medium text-zinc-200">
+                                <p className="text-xs font-medium text-zinc-900 dark:text-zinc-200">
                                   {selectedVoucherForQR.commodity_name}
                                 </p>
                                 <p className="text-[11px] text-zinc-500 mt-0.5">
                                   {selectedVoucherForQR.commodity_items}
                                 </p>
                               </div>
-                              <p className="text-xl font-semibold tracking-[-0.02em] tabular-nums text-zinc-50 whitespace-nowrap">
+                              <p className="text-xl font-semibold tracking-[-0.02em] tabular-nums text-zinc-950 dark:text-zinc-50 whitespace-nowrap">
                                 {formatRupiah(selectedVoucherForQR.nominal_idr)}
                               </p>
                             </div>
 
-                            {/* High-Contrast White QR Container for Reliable Scanning */}
-                            <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-950 border border-zinc-800/90">
+                            <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/90">
                               {qrDataUrl ? (
-                                <div className="p-3 bg-white rounded-lg">
+                                <div className="p-3 bg-white rounded-lg border border-zinc-200 dark:border-transparent">
                                   <img
                                     src={qrDataUrl}
-                                    alt="Voucher QR Code"
+                                    alt="Kode QR Voucher"
                                     className="w-48 h-48 block"
                                   />
                                 </div>
                               ) : (
                                 <div className="w-48 h-48 flex items-center justify-center text-xs text-zinc-500">
-                                  Generating QR...
+                                  Membuat QR...
                                 </div>
                               )}
-                              <div className="mt-4 w-full pt-3 border-t border-zinc-800/80 flex items-center justify-between">
+                              <div className="mt-4 w-full pt-3 border-t border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between">
                                 <span className="text-[10px] font-mono uppercase tracking-[0.08em] text-zinc-500">
-                                  SMS / Print Token
+                                  Kode SMS / Cetak
                                 </span>
-                                <span className="font-mono text-base font-semibold tracking-[0.14em] text-zinc-100">
+                                <span className="font-mono text-base font-semibold tracking-[0.14em] text-zinc-950 dark:text-zinc-100">
                                   {selectedVoucherForQR.short_code}
                                 </span>
                               </div>
                             </div>
 
-                            {/* Metadata Table */}
-                            <div className="p-3.5 rounded-lg bg-[#0C0C0E] border border-zinc-800/80 font-mono text-[11px] space-y-1.5">
+                            <div className="p-3.5 rounded-lg bg-zinc-50 dark:bg-[#0C0C0E] border border-zinc-200 dark:border-zinc-800/80 font-mono text-[11px] space-y-1.5">
                               <div className="flex justify-between gap-4">
                                 <span className="text-zinc-500">ID</span>
-                                <span className="text-zinc-300">
+                                <span className="text-zinc-800 dark:text-zinc-300">
                                   {selectedVoucherForQR.id}
                                 </span>
                               </div>
                               <div className="flex justify-between gap-4">
                                 <span className="text-zinc-500">NONCE</span>
-                                <span className="text-zinc-300">
+                                <span className="text-zinc-800 dark:text-zinc-300">
                                   {selectedVoucherForQR.nonce}
                                 </span>
                               </div>
@@ -2083,13 +2296,12 @@ export default function CivicLedgerApp() {
                                 <span className="text-zinc-500 shrink-0">
                                   HMAC-SHA256
                                 </span>
-                                <span className="text-zinc-400 truncate">
+                                <span className="text-zinc-600 dark:text-zinc-400 truncate">
                                   {selectedVoucherForQR.hmac_signature}
                                 </span>
                               </div>
                             </div>
 
-                            {/* Actions */}
                             <div className="no-print space-y-2.5">
                               <div className="grid grid-cols-2 gap-2">
                                 <button
@@ -2097,27 +2309,27 @@ export default function CivicLedgerApp() {
                                   onClick={() =>
                                     handleCopySmsSlip(selectedVoucherForQR)
                                   }
-                                  className="py-2 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition"
+                                  className="py-2 px-3 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition"
                                 >
                                   {copiedSms ? (
                                     <>
                                       <Check className="w-3.5 h-3.5" />
-                                      Copied
+                                      Tersalin
                                     </>
                                   ) : (
                                     <>
                                       <Copy className="w-3.5 h-3.5" />
-                                      Copy SMS Slip
+                                      Salin Slip SMS
                                     </>
                                   )}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => window.print()}
-                                  className="py-2 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition"
+                                  className="py-2 px-3 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition"
                                 >
                                   <Printer className="w-3.5 h-3.5" />
-                                  Print Slip
+                                  Cetak Slip
                                 </button>
                               </div>
 
@@ -2128,14 +2340,14 @@ export default function CivicLedgerApp() {
                                       selectedVoucherForQR
                                     )
                                   }
-                                  className="w-full py-2.5 px-4 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs flex items-center justify-center gap-1.5 transition"
+                                  className="w-full py-2.5 px-4 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs flex items-center justify-center gap-1.5 transition"
                                 >
-                                  <span>Open in Merchant Terminal</span>
+                                  <span>Buka di Terminal Warung</span>
                                   <ArrowUpRight className="w-3.5 h-3.5" />
                                 </button>
                               ) : (
-                                <div className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-center text-xs text-zinc-400">
-                                  Redeemed at{" "}
+                                <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-600 dark:text-zinc-400">
+                                  Telah ditukar di{" "}
                                   {
                                     selectedVoucherForQR.redeemed_by_merchant_name
                                   }
@@ -2145,8 +2357,8 @@ export default function CivicLedgerApp() {
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-[#111113] rounded-xl border border-zinc-800 p-12 text-center text-zinc-500 text-xs">
-                          No vouchers assigned to this beneficiary.
+                        <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800 p-12 text-center text-zinc-500 text-xs">
+                          Warga ini belum memiliki voucher aktif.
                         </div>
                       )}
                     </div>
@@ -2154,35 +2366,35 @@ export default function CivicLedgerApp() {
                 )}
 
                 {/* ============================================================
-                    VIEW 3: MERCHANT POS TERMINAL
+                    TAB 3: TERMINAL WARUNG (POS OFFLINE)
                    ============================================================ */}
                 {activeTab === "MERCHANT_POS" && (
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                    {/* Left: Terminal Controls */}
-                    <div className="lg:col-span-6 bg-[#111113] rounded-xl border border-zinc-800/90 p-5 space-y-5">
-                      <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
+                    <div className="lg:col-span-6 bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5 space-y-5">
+                      <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800/80">
                         <div>
-                          <h2 className="text-sm font-medium text-zinc-100">
-                            Redemption Scanner
+                          <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            Pemindai Penukaran
                           </h2>
                           <p className="text-xs text-zinc-500 mt-0.5">
-                            Verify QR payloads or 6-character codes offline
+                            Verifikasi payload QR atau kode 6-karakter secara
+                            offline
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={toggleCamera}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-medium transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-medium transition"
                         >
                           {cameraActive ? (
                             <>
-                              <CameraOff className="w-3.5 h-3.5 text-zinc-400" />
-                              Stop Camera
+                              <CameraOff className="w-3.5 h-3.5 text-zinc-500" />
+                              Matikan Kamera
                             </>
                           ) : (
                             <>
-                              <Camera className="w-3.5 h-3.5 text-zinc-400" />
-                              Camera Scan
+                              <Camera className="w-3.5 h-3.5 text-zinc-500" />
+                              Pindai Kamera
                             </>
                           )}
                         </button>
@@ -2190,16 +2402,16 @@ export default function CivicLedgerApp() {
 
                       <div>
                         <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mb-1.5">
-                          Active Merchant
+                          Warung Aktif
                         </label>
                         <select
                           value={activeMerchantId}
                           onChange={(e) => setActiveMerchantId(e.target.value)}
-                          className="w-full px-3 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 text-xs text-zinc-100 outline-none"
+                          className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 text-xs text-zinc-900 dark:text-zinc-100 outline-none"
                         >
                           {merchants.map((m) => (
                             <option key={m.id} value={m.id}>
-                              {m.name} ({m.owner}) · Unsettled{" "}
+                              {m.name} ({m.owner}) · Menunggu Cair{" "}
                               {formatRupiah(m.unsettled_balance_idr)}
                             </option>
                           ))}
@@ -2207,7 +2419,7 @@ export default function CivicLedgerApp() {
                       </div>
 
                       {cameraActive && (
-                        <div className="relative rounded-lg overflow-hidden bg-black aspect-video border border-zinc-800">
+                        <div className="relative rounded-lg overflow-hidden bg-black aspect-video border border-zinc-300 dark:border-zinc-800">
                           <video
                             ref={videoRef}
                             autoPlay
@@ -2218,17 +2430,16 @@ export default function CivicLedgerApp() {
                           <div className="absolute inset-0 border border-zinc-400/50 m-8 rounded-lg pointer-events-none flex items-end justify-center pb-2">
                             <span className="px-2.5 py-0.5 rounded bg-black/80 text-zinc-200 text-[10px] font-mono">
                               {cameraDetectSupported
-                                ? "Auto-detect QR active"
-                                : "Camera preview active"}
+                                ? "Deteksi QR otomatis aktif"
+                                : "Pratinjau kamera aktif"}
                             </span>
                           </div>
                         </div>
                       )}
 
-                      {/* Quick-Pick Voucher List */}
                       <div className="space-y-2">
                         <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-                          Quick-Load Voucher (Single-Device Demo)
+                          Pilih Cepat Voucher (Demo 1 Perangkat)
                         </label>
                         <div className="flex flex-wrap gap-1.5">
                           {vouchers.map((v) => {
@@ -2246,23 +2457,23 @@ export default function CivicLedgerApp() {
                                 }}
                                 className={`px-2.5 py-1.5 rounded-md text-[11px] font-mono border transition ${
                                   selected
-                                    ? "bg-zinc-100 text-zinc-950 border-zinc-100 font-medium"
+                                    ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-950 dark:border-zinc-100 font-medium"
                                     : v.status === "ACTIVE"
-                                      ? "bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-zinc-600"
-                                      : "bg-zinc-950/50 text-zinc-600 border-zinc-800/60"
+                                      ? "bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-800 hover:border-zinc-500 dark:hover:border-zinc-600"
+                                      : "bg-zinc-100/70 dark:bg-zinc-950/50 text-zinc-400 dark:text-zinc-600 border-zinc-200 dark:border-zinc-800/60"
                                 }`}
                               >
-                                {v.short_code} · {v.status.toLowerCase()}
+                                {v.short_code} ·{" "}
+                                {formatStatusLabel(v.status).toLowerCase()}
                               </button>
                             );
                           })}
                         </div>
                       </div>
 
-                      {/* Manual Code Input */}
                       <div>
                         <label className="block text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500 mb-1.5">
-                          Alphanumeric Code
+                          Kode Alfanumerik
                         </label>
                         <input
                           type="text"
@@ -2272,47 +2483,45 @@ export default function CivicLedgerApp() {
                             setScannedQRPayloadRaw("");
                           }}
                           placeholder="CL-8841-K9"
-                          className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 focus:border-zinc-500 font-mono text-sm tracking-wider uppercase text-zinc-100 placeholder:text-zinc-600 outline-none"
+                          className="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-zinc-500 font-mono text-sm tracking-wider uppercase text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none"
                         />
                       </div>
 
-                      {/* Actions */}
                       <div className="space-y-2 pt-1">
                         <button
                           type="button"
                           onClick={() => handleVerifyAndRedeem(false)}
-                          className="w-full py-2.5 px-4 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs transition"
+                          className="w-full py-2.5 px-4 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs transition"
                         >
-                          Verify HMAC-SHA256 &amp; Redeem
+                          Verifikasi HMAC-SHA256 &amp; Tukar
                         </button>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => handleVerifyAndRedeem(true)}
-                            className="py-2 px-3 rounded-lg bg-zinc-950 hover:bg-rose-950/30 border border-zinc-800 hover:border-rose-900/50 text-rose-400 text-xs font-medium transition"
+                            className="py-2 px-3 rounded-lg bg-white hover:bg-rose-50 dark:bg-zinc-950 dark:hover:bg-rose-950/30 border border-zinc-300 dark:border-zinc-800 hover:border-rose-300 dark:hover:border-rose-900/50 text-rose-700 dark:text-rose-400 text-xs font-medium transition"
                           >
-                            Test Tampered Payload
+                            Uji Manipulasi Payload
                           </button>
 
                           <button
                             type="button"
                             onClick={handleSimulateOfflineConflict}
-                            className="py-2 px-3 rounded-lg bg-zinc-950 hover:bg-amber-950/30 border border-zinc-800 hover:border-amber-900/50 text-amber-300 text-xs font-medium transition"
+                            className="py-2 px-3 rounded-lg bg-white hover:bg-amber-50 dark:bg-zinc-950 dark:hover:bg-amber-950/30 border border-zinc-300 dark:border-zinc-800 hover:border-amber-300 dark:hover:border-amber-900/50 text-amber-800 dark:text-amber-300 text-xs font-medium transition"
                           >
-                            Simulate Offline Conflict
+                            Simulasi Konflik Offline
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    {/* Right: Cryptographic Inspector + Offline Queue */}
+                    {/* Kanan: Verifikator Web Crypto + Antrean IndexedDB */}
                     <div className="lg:col-span-6 space-y-5">
-                      {/* WebCrypto Inspector */}
-                      <div className="bg-[#0D0D10] rounded-xl border border-zinc-800/90 overflow-hidden">
+                      <div className="bg-zinc-950 dark:bg-[#0D0D10] text-zinc-100 rounded-xl border border-zinc-800 overflow-hidden">
                         <div className="px-5 py-3.5 border-b border-zinc-800/80 flex items-center justify-between">
                           <span className="text-xs font-medium text-zinc-200">
-                            Web Crypto Verifier{" "}
+                            Verifikator Web Crypto{" "}
                             <span className="font-mono text-zinc-500">
                               (crypto.subtle)
                             </span>
@@ -2347,8 +2556,8 @@ export default function CivicLedgerApp() {
                                   >
                                     {cryptoTrace.hmacValid &&
                                     cryptoTrace.doubleSpendCheckPassed
-                                      ? "Verification Passed"
-                                      : "Verification Rejected"}
+                                      ? "Verifikasi Berhasil"
+                                      : "Verifikasi Ditolak"}
                                   </span>
                                 </span>
                                 <span className="text-zinc-500 tabular-nums">
@@ -2365,7 +2574,7 @@ export default function CivicLedgerApp() {
                               <div className="space-y-2 text-zinc-400">
                                 <div className="flex justify-between gap-4">
                                   <span className="text-zinc-500 shrink-0">
-                                    CLIENT_TX
+                                    ID_TX_KLIEN
                                   </span>
                                   <span className="text-zinc-200 truncate">
                                     {cryptoTrace.clientTxId}
@@ -2373,7 +2582,7 @@ export default function CivicLedgerApp() {
                                 </div>
                                 <div className="flex justify-between gap-4">
                                   <span className="text-zinc-500 shrink-0">
-                                    CANONICAL
+                                    PAYLOAD_KANONIS
                                   </span>
                                   <span className="text-zinc-300 truncate">
                                     {cryptoTrace.canonicalMessage}
@@ -2381,7 +2590,7 @@ export default function CivicLedgerApp() {
                                 </div>
                                 <div className="flex justify-between gap-4">
                                   <span className="text-zinc-500 shrink-0">
-                                    PROVIDED_SIG
+                                    SIG_VOUCHER
                                   </span>
                                   <span className="text-zinc-400 truncate">
                                     {cryptoTrace.providedSignature}
@@ -2389,7 +2598,7 @@ export default function CivicLedgerApp() {
                                 </div>
                                 <div className="flex justify-between gap-4">
                                   <span className="text-zinc-500 shrink-0">
-                                    COMPUTED_HMAC
+                                    HASIL_HMAC
                                   </span>
                                   <span
                                     className={`truncate ${
@@ -2403,7 +2612,7 @@ export default function CivicLedgerApp() {
                                 </div>
                                 <div className="flex justify-between gap-4 pt-2 border-t border-zinc-800/80">
                                   <span className="text-zinc-500">
-                                    NONCE_STATUS
+                                    STATUS_NONCE
                                   </span>
                                   <span
                                     className={
@@ -2413,14 +2622,14 @@ export default function CivicLedgerApp() {
                                     }
                                   >
                                     {cryptoTrace.doubleSpendCheckPassed
-                                      ? "UNSPENT"
-                                      : "ALREADY_SPENT"}
+                                      ? "BELUM_TERPAKAI"
+                                      : "SUDAH_TERPAKAI"}
                                   </span>
                                 </div>
                                 {cryptoTrace.receiptHash && (
                                   <div className="flex justify-between gap-4">
                                     <span className="text-zinc-500 shrink-0">
-                                      RECEIPT_SHA256
+                                      STRUK_SHA256
                                     </span>
                                     <span className="text-zinc-300 truncate">
                                       {cryptoTrace.receiptHash}
@@ -2431,34 +2640,35 @@ export default function CivicLedgerApp() {
                             </div>
                           ) : (
                             <p className="py-6 text-center text-xs text-zinc-500">
-                              Select a voucher and execute verification to
-                              inspect the cryptographic trace.
+                              Pilih voucher lalu jalankan verifikasi untuk
+                              melihat jejak kriptografi secara langsung.
                             </p>
                           )}
                         </div>
                       </div>
 
-                      {/* IndexedDB Offline Queue */}
-                      <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5 space-y-3.5">
+                      <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5 space-y-3.5">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-medium text-zinc-100">
-                            Offline Queue{" "}
+                          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            Antrean Offline{" "}
                             <span className="font-mono text-xs text-zinc-500">
                               (IndexedDB)
                             </span>
                           </h3>
-                          <span className="font-mono text-xs text-zinc-400 tabular-nums">
-                            {offlineQueue.length} pending
+                          <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
+                            {offlineQueue.length} tertunda
                           </span>
                         </div>
 
                         {offlineQueue.length === 0 ? (
                           <p className="text-xs text-zinc-500 leading-relaxed">
-                            Queue is empty. Switch to{" "}
-                            <span className="text-zinc-300">Offline</span> mode
-                            in the sidebar and redeem a voucher, or run{" "}
-                            <span className="text-zinc-300">
-                              Simulate Offline Conflict
+                            Antrean kosong. Ubah ke mode{" "}
+                            <span className="text-zinc-800 dark:text-zinc-300 font-medium">
+                              Offline
+                            </span>{" "}
+                            di sidebar lalu tukarkan voucher, atau klik{" "}
+                            <span className="text-zinc-800 dark:text-zinc-300 font-medium">
+                              Simulasi Konflik Offline
                             </span>
                             .
                           </p>
@@ -2468,16 +2678,16 @@ export default function CivicLedgerApp() {
                               {offlineQueue.map((item) => (
                                 <div
                                   key={item.queue_id}
-                                  className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-3 text-xs"
+                                  className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 text-xs"
                                 >
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="font-mono font-medium text-zinc-100">
+                                      <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
                                         {item.short_code}
                                       </span>
                                       {item.is_simulated_conflict && (
-                                        <span className="text-[10px] font-mono text-rose-400 border border-rose-900/60 bg-rose-950/30 px-1.5 py-0.5 rounded">
-                                          CONFLICT_TEST
+                                        <span className="text-[10px] font-mono text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded">
+                                          UJI_KONFLIK
                                         </span>
                                       )}
                                       <span className="text-zinc-500 truncate">
@@ -2489,7 +2699,7 @@ export default function CivicLedgerApp() {
                                       {item.local_receipt_hash.slice(0, 16)}...
                                     </div>
                                   </div>
-                                  <span className="font-mono text-zinc-200 tabular-nums whitespace-nowrap">
+                                  <span className="font-mono text-zinc-900 dark:text-zinc-200 tabular-nums whitespace-nowrap">
                                     {formatRupiah(item.nominal_idr)}
                                   </span>
                                 </div>
@@ -2499,52 +2709,51 @@ export default function CivicLedgerApp() {
                             <button
                               onClick={handleSyncOfflineBatch}
                               disabled={isSyncingBatch}
-                              className="w-full py-2.5 px-4 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs flex items-center justify-center gap-2 transition"
+                              className="w-full py-2.5 px-4 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 font-medium text-xs flex items-center justify-center gap-2 transition"
                             >
                               <RefreshCw
                                 className={`w-3.5 h-3.5 ${isSyncingBatch ? "animate-spin" : ""}`}
                               />
-                              <span>Sync &amp; Reconcile Batch</span>
+                              <span>Sinkron &amp; Rekonsiliasi Batch</span>
                             </button>
                           </div>
                         )}
                       </div>
 
-                      {/* Latest Sync Reconciliation Report */}
                       {lastSyncResults && lastSyncResults.length > 0 && (
-                        <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5 space-y-3">
+                        <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5 space-y-3">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-medium uppercase tracking-[0.06em] text-zinc-400">
-                              Latest Reconciliation Output
+                            <h3 className="text-xs font-medium uppercase tracking-[0.06em] text-zinc-500 dark:text-zinc-400">
+                              Hasil Rekonsiliasi Server Terbaru
                             </h3>
                             <button
                               onClick={() => setLastSyncResults(null)}
-                              className="text-[11px] text-zinc-500 hover:text-zinc-300"
+                              className="text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
                             >
-                              Clear
+                              Bersihkan
                             </button>
                           </div>
                           <div className="space-y-2">
                             {lastSyncResults.map((r) => (
                               <div
                                 key={r.client_tx_id}
-                                className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs"
+                                className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs"
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="font-mono text-zinc-200">
+                                  <span className="font-mono text-zinc-900 dark:text-zinc-200">
                                     {r.short_code} · {r.client_tx_id}
                                   </span>
                                   <span
                                     className={`font-mono text-[10px] ${
                                       r.status === "SYNCED"
-                                        ? "text-emerald-400"
-                                        : "text-rose-400"
+                                        ? "text-emerald-700 dark:text-emerald-400"
+                                        : "text-rose-700 dark:text-rose-400"
                                     }`}
                                   >
                                     {r.outcome}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-zinc-500 mt-1">
+                                <p className="text-[11px] text-zinc-600 dark:text-zinc-500 mt-1">
                                   {r.reason}
                                 </p>
                               </div>
@@ -2557,20 +2766,19 @@ export default function CivicLedgerApp() {
                 )}
 
                 {/* ============================================================
-                    VIEW 4: CLEARINGHOUSE & AUDIT LEDGER
+                    TAB 4: KLIRING & BUKU BESAR AUDIT
                    ============================================================ */}
                 {activeTab === "CLEARINGHOUSE" && (
                   <div className="space-y-6">
-                    {/* Merchant Settlement Section */}
-                    <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5 space-y-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-800/80">
+                    <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5 space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-200 dark:border-zinc-800/80">
                         <div>
-                          <h2 className="text-sm font-medium text-zinc-100">
-                            Merchant Settlement Queue
+                          <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            Antrean Pencairan Warung Mitra
                           </h2>
                           <p className="text-xs text-zinc-500 mt-0.5">
-                            Aggregate redeemed vouchers into hashed payout
-                            batches (simulated rail).
+                            Gabungkan voucher tertukar menjadi batch pencairan
+                            ber-hash (jalur transfer simulasi).
                           </p>
                         </div>
 
@@ -2579,79 +2787,93 @@ export default function CivicLedgerApp() {
                           disabled={totalUnsettledIdr === 0}
                           className={`px-3.5 py-2 rounded-lg text-xs font-medium transition tabular-nums ${
                             totalUnsettledIdr > 0
-                              ? "bg-zinc-100 hover:bg-white text-zinc-950"
-                              : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed"
+                              ? "bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950"
+                              : "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-600 border border-zinc-200 dark:border-zinc-800 cursor-not-allowed"
                           }`}
                         >
-                          Settle All ({formatRupiah(totalUnsettledIdr)})
+                          Cairkan Semua ({formatRupiah(totalUnsettledIdr)})
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {merchants.map((m) => (
-                          <div
-                            key={m.id}
-                            className="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800/80 flex flex-col justify-between"
-                          >
-                            <div>
-                              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
-                                <span>{m.id}</span>
-                                <span className="tabular-nums">
-                                  {m.redemption_count} tx
-                                </span>
+                      {merchants.length === 0 ? (
+                        <p className="py-8 text-center text-xs text-zinc-500">
+                          Belum ada warung mitra yang terdaftar.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {merchants.map((m) => (
+                            <div
+                              key={m.id}
+                              className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800/80 flex flex-col justify-between"
+                            >
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
+                                  <span>{m.id}</span>
+                                  <span className="tabular-nums">
+                                    {m.redemption_count} tx
+                                  </span>
+                                </div>
+                                <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mt-1.5">
+                                  {m.name}
+                                </h3>
+                                <p className="text-xs text-zinc-500 mt-0.5">
+                                  {m.rt_rw}
+                                </p>
+                                <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mt-2">
+                                  {m.bank_account}
+                                </p>
                               </div>
-                              <h3 className="text-sm font-medium text-zinc-100 mt-1.5">
-                                {m.name}
-                              </h3>
-                              <p className="text-xs text-zinc-500 mt-0.5">
-                                {m.rt_rw}
-                              </p>
-                              <p className="text-[11px] font-mono text-zinc-400 mt-2">
-                                {m.bank_account}
-                              </p>
-                            </div>
 
-                            <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-1.5 text-xs">
-                              <div className="flex justify-between">
-                                <span className="text-zinc-500">Pending</span>
-                                <span className="font-mono text-zinc-100 tabular-nums">
-                                  {formatRupiah(m.unsettled_balance_idr)}
-                                </span>
+                              <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-800/80 space-y-1.5 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-zinc-500">
+                                    Menunggu Cair
+                                  </span>
+                                  <span className="font-mono text-zinc-950 dark:text-zinc-100 tabular-nums">
+                                    {formatRupiah(m.unsettled_balance_idr)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-zinc-500">
+                                    Sudah Cair
+                                  </span>
+                                  <span className="font-mono text-zinc-600 dark:text-zinc-400 tabular-nums">
+                                    {formatRupiah(m.total_settled_idr)}
+                                  </span>
+                                </div>
+                                {m.unsettled_balance_idr > 0 ? (
+                                  <button
+                                    onClick={() => handleSettleMerchants(m.id)}
+                                    className="w-full mt-2.5 py-1.5 px-3 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs font-medium transition"
+                                  >
+                                    Cairkan Warung
+                                  </button>
+                                ) : (
+                                  <p className="pt-2 text-[11px] text-zinc-400 dark:text-zinc-600">
+                                    Tidak ada saldo menunggu cair
+                                  </p>
+                                )}
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-zinc-500">Settled</span>
-                                <span className="font-mono text-zinc-400 tabular-nums">
-                                  {formatRupiah(m.total_settled_idr)}
-                                </span>
-                              </div>
-                              {m.unsettled_balance_idr > 0 && (
-                                <button
-                                  onClick={() => handleSettleMerchants(m.id)}
-                                  className="w-full mt-2.5 py-1.5 px-3 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 text-xs font-medium transition"
-                                >
-                                  Settle Merchant
-                                </button>
-                              )}
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Immutable Hash-Chained Ledger */}
-                    <div className="bg-[#111113] rounded-xl border border-zinc-800/90 overflow-hidden">
-                      <div className="p-5 border-b border-zinc-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    {/* Buku Besar Audit Rantai Hash */}
+                    <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 overflow-hidden">
+                      <div className="p-5 border-b border-zinc-200 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
-                          <h3 className="text-sm font-medium text-zinc-100">
-                            SHA-256 Hash-Chained Audit Ledger
+                          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            Buku Besar Audit Berantai Hash SHA-256
                           </h3>
                           <p className="text-xs text-zinc-500 mt-0.5">
-                            Append-only transaction log linking{" "}
-                            <span className="font-mono text-zinc-400">
+                            Catatan transaksi tahan manipulasi yang menautkan{" "}
+                            <span className="font-mono text-zinc-700 dark:text-zinc-400">
                               prev_hash
                             </span>{" "}
-                            to{" "}
-                            <span className="font-mono text-zinc-400">
+                            ke{" "}
+                            <span className="font-mono text-zinc-700 dark:text-zinc-400">
                               tx_hash
                             </span>
                             .
@@ -2662,26 +2884,26 @@ export default function CivicLedgerApp() {
                           type="button"
                           onClick={handleVerifyHashChain}
                           disabled={isVerifyingChain}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 text-xs font-medium shrink-0 transition"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs font-medium shrink-0 transition"
                         >
-                          <ShieldCheck className="w-3.5 h-3.5 text-zinc-300" />
+                          <ShieldCheck className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-300" />
                           <span>
                             {isVerifyingChain
-                              ? "Verifying..."
-                              : "Verify Chain Integrity"}
+                              ? "Memverifikasi..."
+                              : "Verifikasi Integritas Rantai"}
                           </span>
                         </button>
                       </div>
 
                       {chainCheckResult && (
-                        <div className="px-5 py-3 bg-[#0E0E10] border-b border-zinc-800/80 flex items-center justify-between gap-3 text-xs">
+                        <div className="px-5 py-3 bg-zinc-50 dark:bg-[#0E0E10] border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-3 text-xs">
                           <div className="flex items-center gap-2">
                             {chainCheckResult.valid ? (
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 shrink-0" />
                             ) : (
-                              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0" />
                             )}
-                            <span className="text-zinc-200">
+                            <span className="text-zinc-800 dark:text-zinc-200">
                               {chainCheckResult.message}
                             </span>
                           </div>
@@ -2694,163 +2916,187 @@ export default function CivicLedgerApp() {
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="border-b border-zinc-800/80 text-[10px] font-medium uppercase tracking-[0.06em] text-zinc-500 bg-[#0E0E10]">
-                              <th className="py-2.5 pl-5 pr-3">Transaction</th>
+                            <tr className="border-b border-zinc-200 dark:border-zinc-800/80 text-[10px] font-medium uppercase tracking-[0.06em] text-zinc-500 bg-zinc-50 dark:bg-[#0E0E10]">
+                              <th className="py-2.5 pl-5 pr-3">Transaksi</th>
                               <th className="py-2.5 px-3">Voucher</th>
-                              <th className="py-2.5 px-3">Merchant</th>
+                              <th className="py-2.5 px-3">Warung Mitra</th>
                               <th className="py-2.5 px-3">Mode</th>
                               <th className="py-2.5 pl-3 pr-5">
-                                Hash Chain (Prev / Curr)
+                                Rantai Hash (Prev / Curr)
                               </th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-zinc-800/60 text-xs">
-                            {ledger.map((entry) => (
-                              <tr
-                                key={entry.id}
-                                className="hover:bg-zinc-900/40 transition"
-                              >
-                                <td className="py-3.5 pl-5 pr-3 whitespace-nowrap">
-                                  <span className="font-mono font-medium text-zinc-100">
-                                    {entry.id}
-                                  </span>
-                                  <div className="text-[10px] font-mono text-zinc-500">
-                                    {entry.client_tx_id}
-                                  </div>
-                                  <div className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
-                                    {formatDateTime(entry.timestamp)}
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-3">
-                                  <span className="font-mono text-zinc-200">
-                                    {entry.short_code}
-                                  </span>{" "}
-                                  <span className="text-zinc-400">
-                                    · {entry.commodity_name}
-                                  </span>
-                                  <div className="font-mono text-[11px] text-zinc-300 tabular-nums mt-0.5">
-                                    {formatRupiah(entry.nominal_idr)} ·{" "}
-                                    {entry.beneficiary_id}
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-3">
-                                  <div className="text-zinc-200">
-                                    {entry.merchant_name}
-                                  </div>
-                                  <div className="text-[11px] text-zinc-500">
-                                    {entry.settlement_batch_id
-                                      ? `Settled (${entry.settlement_batch_id})`
-                                      : "Unsettled"}
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-3 whitespace-nowrap">
-                                  <span className="font-mono text-[10px] text-zinc-400 border border-zinc-800 bg-zinc-950 px-2 py-0.5 rounded">
-                                    {entry.sync_mode}
-                                  </span>
-                                </td>
-                                <td className="py-3.5 pl-3 pr-5 font-mono text-[10px] text-zinc-500 max-w-xs">
-                                  <div className="truncate">
-                                    P: {entry.prev_hash.slice(0, 22)}...
-                                  </div>
-                                  <div className="truncate text-zinc-300">
-                                    C: {entry.tx_hash.slice(0, 22)}...
-                                  </div>
+                          <tbody className="divide-y divide-zinc-200/80 dark:divide-zinc-800/60 text-xs">
+                            {ledger.length === 0 ? (
+                              <tr>
+                                <td
+                                  colSpan={5}
+                                  className="py-10 text-center text-zinc-500 text-xs"
+                                >
+                                  Belum ada transaksi buku besar yang tercatat.
                                 </td>
                               </tr>
-                            ))}
+                            ) : (
+                              ledger.map((entry) => (
+                                <tr
+                                  key={entry.id}
+                                  className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition"
+                                >
+                                  <td className="py-3.5 pl-5 pr-3 whitespace-nowrap">
+                                    <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+                                      {entry.id}
+                                    </span>
+                                    <div className="text-[10px] font-mono text-zinc-500">
+                                      {entry.client_tx_id}
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
+                                      {formatDateTime(entry.timestamp)}
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 px-3">
+                                    <span className="font-mono text-zinc-900 dark:text-zinc-200">
+                                      {entry.short_code}
+                                    </span>{" "}
+                                    <span className="text-zinc-500 dark:text-zinc-400">
+                                      · {entry.commodity_name}
+                                    </span>
+                                    <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 tabular-nums mt-0.5">
+                                      {formatRupiah(entry.nominal_idr)} ·{" "}
+                                      {entry.beneficiary_id}
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 px-3">
+                                    <div className="text-zinc-900 dark:text-zinc-200">
+                                      {entry.merchant_name}
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500">
+                                      {entry.settlement_batch_id
+                                        ? `Cair (${entry.settlement_batch_id})`
+                                        : "Belum dicairkan"}
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 px-3 whitespace-nowrap">
+                                    <span className="font-mono text-[10px] text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-2 py-0.5 rounded">
+                                      {entry.sync_mode}
+                                    </span>
+                                  </td>
+                                  <td className="py-3.5 pl-3 pr-5 font-mono text-[10px] text-zinc-500 max-w-xs">
+                                    <div className="truncate">
+                                      P: {entry.prev_hash.slice(0, 22)}...
+                                    </div>
+                                    <div className="truncate text-zinc-800 dark:text-zinc-300">
+                                      C: {entry.tx_hash.slice(0, 22)}...
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>
                     </div>
 
-                    {/* Reconciliation Log & Settlement Receipts */}
+                    {/* Log Rekonsiliasi & Struk Pencairan */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                      <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5">
-                        <h3 className="text-sm font-medium text-zinc-100">
-                          Reconciliation Audit Log
+                      <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5">
+                        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          Log Audit Rekonsiliasi
                         </h3>
                         <p className="text-xs text-zinc-500 mt-0.5 mb-4">
-                          Server validation history for offline batch syncs
+                          Riwayat validasi server untuk sinkronisasi batch
+                          offline
                         </p>
-                        <div className="space-y-2 max-h-72 overflow-y-auto">
-                          {reconciliationLogs.map((log) => (
-                            <div
-                              key={log.id}
-                              className="p-3 rounded-lg bg-zinc-950/70 border border-zinc-800/80 text-xs"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-mono text-zinc-200">
-                                  {log.short_code} · {log.client_tx_id}
-                                </span>
-                                <span
-                                  className={`font-mono text-[10px] ${
-                                    log.outcome === "SYNCED"
-                                      ? "text-emerald-400"
-                                      : "text-rose-400"
-                                  }`}
-                                >
-                                  {log.outcome}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-zinc-400 mt-1">
-                                {log.reason}
-                              </p>
-                              <p className="text-[10px] text-zinc-600 mt-1">
-                                {log.merchant_name} ·{" "}
-                                {formatDateTime(log.processed_at)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-[#111113] rounded-xl border border-zinc-800/90 p-5">
-                        <h3 className="text-sm font-medium text-zinc-100">
-                          Settlement Receipts
-                        </h3>
-                        <p className="text-xs text-zinc-500 mt-0.5 mb-4">
-                          SHA-256 hashed merchant payout batches
-                        </p>
-                        <div className="space-y-2 max-h-72 overflow-y-auto">
-                          {settlementBatches.map((b) => (
-                            <div
-                              key={b.id}
-                              className="p-3.5 rounded-lg bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between gap-3 text-xs"
-                            >
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-zinc-200">
-                                    {b.id}
+                        {reconciliationLogs.length === 0 ? (
+                          <p className="py-8 text-center text-xs text-zinc-500">
+                            Belum ada catatan rekonsiliasi offline.
+                          </p>
+                        ) : (
+                          <div className="space-y-2 max-h-72 overflow-y-auto">
+                            {reconciliationLogs.map((log) => (
+                              <div
+                                key={log.id}
+                                className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800/80 text-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-mono text-zinc-900 dark:text-zinc-200">
+                                    {log.short_code} · {log.client_tx_id}
                                   </span>
-                                  <span className="text-[11px] text-zinc-500 tabular-nums">
-                                    {formatDateTime(b.settled_at)}
+                                  <span
+                                    className={`font-mono text-[10px] ${
+                                      log.outcome === "SYNCED"
+                                        ? "text-emerald-700 dark:text-emerald-400"
+                                        : "text-rose-700 dark:text-rose-400"
+                                    }`}
+                                  >
+                                    {log.outcome}
                                   </span>
                                 </div>
-                                <p className="text-zinc-300 mt-1 truncate">
-                                  {b.merchant_name} · {b.bank_account}
+                                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-1">
+                                  {log.reason}
                                 </p>
-                                <p className="font-mono text-[10px] text-zinc-600 mt-0.5 truncate">
-                                  SHA256 {b.batch_hash.slice(0, 26)}...
-                                </p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <span className="font-mono font-medium text-zinc-100 tabular-nums">
-                                  {formatRupiah(b.total_amount_idr)}
-                                </span>
-                                <p className="text-[11px] text-zinc-500 tabular-nums">
-                                  {b.voucher_count} voucher(s)
+                                <p className="text-[10px] text-zinc-500 dark:text-zinc-600 mt-1">
+                                  {log.merchant_name} ·{" "}
+                                  {formatDateTime(log.processed_at)}
                                 </p>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5">
+                        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          Struk Batch Pencairan
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5 mb-4">
+                          Riwayat batch pencairan warung ber-hash SHA-256
+                        </p>
+                        {settlementBatches.length === 0 ? (
+                          <p className="py-8 text-center text-xs text-zinc-500">
+                            Belum ada batch pencairan yang selesai.
+                          </p>
+                        ) : (
+                          <div className="space-y-2 max-h-72 overflow-y-auto">
+                            {settlementBatches.map((b) => (
+                              <div
+                                key={b.id}
+                                className="p-3.5 rounded-lg bg-zinc-50 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-3 text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-zinc-900 dark:text-zinc-200">
+                                      {b.id}
+                                    </span>
+                                    <span className="text-[11px] text-zinc-500 tabular-nums">
+                                      {formatDateTime(b.settled_at)}
+                                    </span>
+                                  </div>
+                                  <p className="text-zinc-700 dark:text-zinc-300 mt-1 truncate">
+                                    {b.merchant_name} · {b.bank_account}
+                                  </p>
+                                  <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-600 mt-0.5 truncate">
+                                    SHA256 {b.batch_hash.slice(0, 26)}...
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className="font-mono font-medium text-zinc-950 dark:text-zinc-100 tabular-nums">
+                                    {formatRupiah(b.total_amount_idr)}
+                                  </span>
+                                  <p className="text-[11px] text-zinc-500 tabular-nums">
+                                    {b.voucher_count} voucher
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* ============================================================
-                    VIEW 5: REPORTS & AUDIT
+                    TAB 5: LAPORAN & AUDIT
                    ============================================================ */}
                 {activeTab === "REPORTS" && (
                   <ReportsComplianceTab
@@ -2867,6 +3113,13 @@ export default function CivicLedgerApp() {
                     onExportCsv={handleExportCsv}
                     onExportJson={handleExportJson}
                   />
+                )}
+
+                {/* ============================================================
+                    TAB 6: PANDUAN PENGGUNA
+                   ============================================================ */}
+                {activeTab === "GUIDE" && (
+                  <UserGuideTab onNavigate={(tab) => setActiveTab(tab)} />
                 )}
               </>
             )}

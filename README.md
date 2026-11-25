@@ -104,6 +104,8 @@ To retain substantive development work for the STACK 2026 Final Day Build Sessio
 
 - **Open-Source Frameworks & Libraries:** React, Next.js, Tailwind CSS, Lucide Icons, `qrcode`, Go standard library, `github.com/lib/pq`, PostgreSQL.
 - **References:**
+  - APJII (Asosiasi Penyelenggara Jasa Internet Indonesia), *Survei Penetrasi Internet Indonesia 2025*.
+  - TNP2K & World Bank Indonesia, *Evaluations of Non-Cash Food Assistance (BPNT / Program Sembako) and e-Warong Operations in Indonesia*.
   - GSMA, *The State of Mobile Internet Connectivity 2026*.
   - World Bank, *Global Findex Database 2025*.
 - **Material AI Assistance Disclosure:** AI coding assistance (Google Gemini / Antigravity) was used to scaffold and refine the React/Next.js PWA interface, IndexedDB offline queue wrapper, Golang REST API handlers, and PostgreSQL schema based on Team `Run.exe`'s architectural design and abstract specification. All business logic, cryptographic flows, tests, and documentation were reviewed, verified, and maintained by the team.

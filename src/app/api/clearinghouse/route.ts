@@ -27,7 +27,7 @@ async function proxyToGoBackend(
   body?: unknown
 ): Promise<Response | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1200);
+  const timeout = setTimeout(() => controller.abort(), 500);
   try {
     const res = await fetch(`${GO_BACKEND_URL}${path}`, {
       method,
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       const ben = state.beneficiaries.find((b) => b.id === beneficiary_id);
       if (!ben) {
         return NextResponse.json(
-          { error: "Beneficiary not found in registry." },
+          { error: "Warga penerima manfaat tidak ditemukan di registri." },
           { status: 404 }
         );
       }
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       const cat = COMMODITY_CATALOG.find((c) => c.code === commodity_code);
       if (!cat) {
         return NextResponse.json(
-          { error: "Invalid commodity package selected." },
+          { error: "Paket komoditas yang dipilih tidak valid." },
           { status: 400 }
         );
       }
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
       const { name, rt_rw, category, phone, household_size } = body;
       if (!name || !rt_rw) {
         return NextResponse.json(
-          { error: "Beneficiary name and RT/RW are required." },
+          { error: "Nama warga dan RT/RW wajib diisi." },
           { status: 400 }
         );
       }
@@ -178,10 +178,10 @@ export async function POST(req: NextRequest) {
         id: `WGA-04${state.beneficiaries.length + 10}`,
         name: String(name).trim(),
         rt_rw: String(rt_rw).trim(),
-        category: category || "Verified Vulnerable Household",
-        phone: phone || "0812-0000-1111 (SMS / Mobile Web)",
+        category: category || "Keluarga Rentan Terverifikasi",
+        phone: phone || "0812-0000-1111 (SMS / Web Ponsel)",
         household_size: Number(household_size) || 3,
-        verified_by: "RT 04 Coordinator — Pak H. Dedi",
+        verified_by: "Koordinator RT 04 — Pak H. Dedi",
       };
       state.beneficiaries.push(newBen);
       saveClearinghouseState(state);
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
       const { name, owner, rt_rw, bank_account } = body;
       if (!name || !owner) {
         return NextResponse.json(
-          { error: "Merchant stall name and owner are required." },
+          { error: "Nama warung dan nama pemilik wajib diisi." },
           { status: 400 }
         );
       }
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
         name: String(name).trim(),
         owner: String(owner).trim(),
         rt_rw: String(rt_rw || "RT 04 / RW 08 Coblong, Bandung").trim(),
-        bank_account: String(bank_account || "QRIS Micro Merchant •• 0000").trim(),
+        bank_account: String(bank_account || "QRIS Warung Mikro •• 0000").trim(),
         unsettled_balance_idr: 0,
         total_settled_idr: 0,
         redemption_count: 0,
@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
         saveClearinghouseState(state);
         return NextResponse.json(
           {
-            error: `Duplicate transaction identifier ${txId} already processed.`,
+            error: `ID transaksi duplikat ${txId} sudah pernah diproses sebelumnya.`,
           },
           { status: 409 }
         );
@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
 
       if (!voucher) {
         return NextResponse.json(
-          { error: "Voucher not found in clearinghouse registry." },
+          { error: "Voucher tidak ditemukan di registri lembaga kliring." },
           { status: 404 }
         );
       }
@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
         saveClearinghouseState(state);
         return NextResponse.json(
           {
-            error: `Anti-Double-Spend Reject: Voucher ${voucher.short_code} is already ${voucher.status} (redeemed at ${voucher.redeemed_by_merchant_name || "partner merchant"}).`,
+            error: `Ditolak (Anti-Double-Spend): Voucher ${voucher.short_code} sudah berstatus ${voucher.status} (telah ditukar di ${voucher.redeemed_by_merchant_name || "warung mitra lain"}).`,
           },
           { status: 409 }
         );
@@ -267,7 +267,7 @@ export async function POST(req: NextRequest) {
       const merchant = state.merchants.find((m) => m.id === merchant_id);
       if (!merchant) {
         return NextResponse.json(
-          { error: "Participating merchant not found." },
+          { error: "Warung mitra tidak ditemukan." },
           { status: 404 }
         );
       }
@@ -291,7 +291,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Cryptographic verification failed: HMAC-SHA256 signature mismatch (tampered payload detected).",
+              "Verifikasi kriptografi gagal: tanda tangan HMAC-SHA256 tidak cocok (indikasi manipulasi payload).",
           },
           { status: 403 }
         );
@@ -394,14 +394,14 @@ export async function POST(req: NextRequest) {
         };
 
         if (!voucher || !merchant) {
-          recordConflict("NOT_FOUND", "Voucher or merchant not found in registry.");
+          recordConflict("NOT_FOUND", "Voucher atau warung mitra tidak ditemukan di registri.");
           continue;
         }
 
         if (state.ledger.some((l) => l.client_tx_id === ctxId)) {
           recordConflict(
             "DUPLICATE_CONFLICT",
-            `Duplicate client transaction ID ${ctxId} already exists in ledger.`
+            `ID transaksi klien duplikat ${ctxId} sudah tercatat di buku besar.`
           );
           continue;
         }
@@ -409,7 +409,7 @@ export async function POST(req: NextRequest) {
         if (voucher.status !== "ACTIVE") {
           recordConflict(
             "DUPLICATE_CONFLICT",
-            `Anti-Double-Spend Reject: Voucher ${voucher.short_code} is already ${voucher.status} (previously redeemed at ${voucher.redeemed_by_merchant_name || "another merchant"}).`
+            `Ditolak (Anti-Double-Spend): Voucher ${voucher.short_code} sudah berstatus ${voucher.status} (sebelumnya ditukar di ${voucher.redeemed_by_merchant_name || "warung mitra lain"}).`
           );
           continue;
         }
@@ -430,7 +430,7 @@ export async function POST(req: NextRequest) {
         ) {
           recordConflict(
             "INVALID_SIGNATURE",
-            "HMAC-SHA256 signature validation failed during server reconciliation."
+            "Validasi tanda tangan HMAC-SHA256 gagal saat rekonsiliasi server."
           );
           continue;
         }
@@ -476,7 +476,7 @@ export async function POST(req: NextRequest) {
         state.ledger.unshift(entry);
 
         const okReason =
-          "Offline redemption validated and appended to SHA-256 hash-chained ledger.";
+          "Penukaran offline divalidasi dan dicatat ke buku besar rantai hash SHA-256.";
         state.reconciliation_logs.unshift({
           id: `REC-${crypto.randomBytes(3).toString("hex").toUpperCase()}`,
           client_tx_id: ctxId,
@@ -522,7 +522,7 @@ export async function POST(req: NextRequest) {
 
       if (targets.length === 0) {
         return NextResponse.json(
-          { error: "No unsettled merchant balances awaiting disbursement." },
+          { error: "Tidak ada saldo warung yang menunggu pencairan." },
           { status: 400 }
         );
       }

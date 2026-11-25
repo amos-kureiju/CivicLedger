@@ -23,26 +23,26 @@ const STATE_FILE = path.join(process.cwd(), ".civicledger-ledger.json");
 export const COMMODITY_CATALOG: CommodityItem[] = [
   {
     code: "PKG-BERAS-5KG",
-    name: "Local Rice Staple Pack (5 Kg)",
-    items: "5 Kg Medium-Grade Rice (Commodity-Locked, Non-Cash)",
+    name: "Paket Beras Lokal Medium (5 Kg)",
+    items: "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
     nominal_idr: 72500,
   },
   {
     code: "PKG-PROTEIN-01",
-    name: "Family Protein & Nutrition Pack",
-    items: "1 Kg Eggs + 2 Blocks Tempeh + 10 Pieces Tofu",
+    name: "Paket Gizi & Protein Keluarga",
+    items: "Telur Ayam 1 Kg + Tempe 2 Papan + Tahu 10 Potong",
     nominal_idr: 42000,
   },
   {
     code: "PKG-DAPUR-02",
-    name: "Cooking Oil & Kitchen Essentials",
-    items: "2L Cooking Oil + 1 Kg Granulated Sugar + Iodized Salt",
+    name: "Paket Minyak Goreng & Pokok Dapur",
+    items: "Minyak Goreng 2 Liter + Gula Pasir 1 Kg + Garam Beryodium",
     nominal_idr: 51000,
   },
   {
     code: "PKG-DARURAT-FULL",
-    name: "Emergency Complete Staple Pack",
-    items: "5 Kg Rice + 1 Kg Eggs + 1L Cooking Oil + Child Milk",
+    name: "Paket Sembako Darurat Lengkap",
+    items: "Beras 5 Kg + Telur 1 Kg + Minyak Goreng 1L + Susu Anak",
     nominal_idr: 115000,
   },
 ];
@@ -82,7 +82,7 @@ export function verifyLedgerChainNode(
       valid: true,
       checked_count: 0,
       head_hash: GENESIS_HASH,
-      message: "Ledger is empty; genesis hash intact.",
+      message: "Buku besar masih kosong; jangkar hash genesis utuh.",
     };
   }
   let expectedPrev = GENESIS_HASH;
@@ -94,7 +94,7 @@ export function verifyLedgerChainNode(
         checked_count: entries.length - i,
         head_hash: entries[0].tx_hash,
         broken_at_id: e.id,
-        message: `Hash chain discontinuity at ${e.id}.`,
+        message: `Terdeteksi pemutusan rantai hash pada transaksi ${e.id}.`,
       };
     }
     const recomputed = computeLedgerTxHashNode({
@@ -111,7 +111,7 @@ export function verifyLedgerChainNode(
         checked_count: entries.length - i,
         head_hash: entries[0].tx_hash,
         broken_at_id: e.id,
-        message: `Tampered payload detected at ${e.id}.`,
+        message: `Terdeteksi manipulasi payload pada transaksi ${e.id}.`,
       };
     }
     expectedPrev = e.tx_hash;
@@ -120,7 +120,7 @@ export function verifyLedgerChainNode(
     valid: true,
     checked_count: entries.length,
     head_hash: entries[0].tx_hash,
-    message: `All ${entries.length} ledger entries verified against SHA-256 hash chain.`,
+    message: `Seluruh ${entries.length} transaksi buku besar terverifikasi utuh terhadap rantai hash SHA-256.`,
   };
 }
 
@@ -134,39 +134,39 @@ function buildInitialSeedState(): ClearinghouseState {
   const beneficiaries: Beneficiary[] = [
     {
       id: "WGA-0401",
-      name: "Ibu Siti Aminah (Elderly)",
+      name: "Ibu Siti Aminah (Lansia)",
       rt_rw: "RT 04 / RW 08 Coblong, Bandung",
-      category: "Vulnerable Senior Household",
-      phone: "0812-2104-8891 (SMS / Printed Code)",
+      category: "Keluarga Lansia Rentan",
+      phone: "0812-2104-8891 (SMS / Kode Cetak)",
       household_size: 2,
-      verified_by: "RT 04 Coordinator — Pak H. Dedi",
+      verified_by: "Koordinator RT 04 — Pak H. Dedi",
     },
     {
       id: "WGA-0402",
-      name: "Pak Deden Suryana Family",
+      name: "Keluarga Pak Deden Suryana",
       rt_rw: "RT 04 / RW 08 Coblong, Bandung",
-      category: "Displaced Daily-Wage Worker",
-      phone: "0857-9412-3302 (Mobile PWA QR)",
+      category: "Pekerja Harian Lepas Terdampak",
+      phone: "0857-9412-3302 (QR Web Ponsel)",
       household_size: 4,
-      verified_by: "RT 04 Coordinator — Pak H. Dedi",
+      verified_by: "Koordinator RT 04 — Pak H. Dedi",
     },
     {
       id: "WGA-0403",
       name: "Ibu Rina Kartika",
       rt_rw: "RT 02 / RW 08 Coblong, Bandung",
-      category: "Single-Parent Household",
-      phone: "0813-2289-7104 (Mobile PWA QR)",
+      category: "Kepala Keluarga Perempuan",
+      phone: "0813-2289-7104 (QR Web Ponsel)",
       household_size: 3,
-      verified_by: "RW 08 Posyandu Volunteer",
+      verified_by: "Relawan Posyandu RW 08",
     },
     {
       id: "WGA-0404",
       name: "Pak Maman Abdurrahman",
       rt_rw: "RT 05 / RW 08 Coblong, Bandung",
-      category: "Medical Recovery Support",
-      phone: "0896-5541-0029 (SMS / Printed Code)",
+      category: "Pemulihan Medis & Rentan",
+      phone: "0896-5541-0029 (SMS / Kode Cetak)",
       household_size: 3,
-      verified_by: "RW 08 Chair — Ir. Bambang",
+      verified_by: "Ketua RW 08 — Ir. Bambang",
     },
   ];
 
@@ -186,7 +186,7 @@ function buildInitialSeedState(): ClearinghouseState {
       name: "Toko Sembako Pak Asep Mandiri",
       owner: "Pak Asep Sunandar",
       rt_rw: "RT 02 / RW 08 (Jl. Cisitu Lama)",
-      bank_account: "Bank BJB Micro / QRIS •• 9012",
+      bank_account: "Bank BJB Mikro / QRIS •• 9012",
       unsettled_balance_idr: 51000,
       total_settled_idr: 350000,
       redemption_count: 4,
@@ -196,7 +196,7 @@ function buildInitialSeedState(): ClearinghouseState {
       name: "Warung Sayur & Pangan Teh Euis",
       owner: "Teh Euis Komariah",
       rt_rw: "RT 05 / RW 08 (Gg. Dago Pojok)",
-      bank_account: "Mandiri Micro / GoPay Merchant •• 3319",
+      bank_account: "Mandiri Mikro / GoPay Merchant •• 3319",
       unsettled_balance_idr: 0,
       total_settled_idr: 290000,
       redemption_count: 3,
@@ -244,11 +244,11 @@ function buildInitialSeedState(): ClearinghouseState {
       id: "VCH-2026-8841",
       short_code: "CL-8841-K9",
       beneficiary_id: "WGA-0401",
-      beneficiary_name: "Ibu Siti Aminah (Elderly)",
+      beneficiary_name: "Ibu Siti Aminah (Lansia)",
       rt_rw: "RT 04 / RW 08 Coblong, Bandung",
       commodity_code: "PKG-BERAS-5KG",
-      commodity_name: "Local Rice Staple Pack (5 Kg)",
-      commodity_items: "5 Kg Medium-Grade Rice (Commodity-Locked, Non-Cash)",
+      commodity_name: "Paket Beras Lokal Medium (5 Kg)",
+      commodity_items: "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
       nominal_idr: 72500,
       nonce: "n9f81a2b4c6d",
       issued_at: issuedIso,
@@ -260,11 +260,11 @@ function buildInitialSeedState(): ClearinghouseState {
       id: "VCH-2026-7732",
       short_code: "CL-7732-M4",
       beneficiary_id: "WGA-0402",
-      beneficiary_name: "Pak Deden Suryana Family",
+      beneficiary_name: "Keluarga Pak Deden Suryana",
       rt_rw: "RT 04 / RW 08 Coblong, Bandung",
       commodity_code: "PKG-DARURAT-FULL",
-      commodity_name: "Emergency Complete Staple Pack",
-      commodity_items: "5 Kg Rice + 1 Kg Eggs + 1L Cooking Oil + Child Milk",
+      commodity_name: "Paket Sembako Darurat Lengkap",
+      commodity_items: "Beras 5 Kg + Telur 1 Kg + Minyak Goreng 1L + Susu Anak",
       nominal_idr: 115000,
       nonce: "a3c5e7f91b2d",
       issued_at: issuedIso,
@@ -279,8 +279,8 @@ function buildInitialSeedState(): ClearinghouseState {
       beneficiary_name: "Ibu Rina Kartika",
       rt_rw: "RT 02 / RW 08 Coblong, Bandung",
       commodity_code: "PKG-PROTEIN-01",
-      commodity_name: "Family Protein & Nutrition Pack",
-      commodity_items: "1 Kg Eggs + 2 Blocks Tempeh + 10 Pieces Tofu",
+      commodity_name: "Paket Gizi & Protein Keluarga",
+      commodity_items: "Telur Ayam 1 Kg + Tempe 2 Papan + Tahu 10 Potong",
       nominal_idr: 42000,
       nonce: "d4e8f1a09c3b",
       issued_at: issuedIso,
@@ -295,8 +295,8 @@ function buildInitialSeedState(): ClearinghouseState {
       beneficiary_name: "Pak Maman Abdurrahman",
       rt_rw: "RT 05 / RW 08 Coblong, Bandung",
       commodity_code: "PKG-BERAS-5KG",
-      commodity_name: "Local Rice Staple Pack (5 Kg)",
-      commodity_items: "5 Kg Medium-Grade Rice (Commodity-Locked, Non-Cash)",
+      commodity_name: "Paket Beras Lokal Medium (5 Kg)",
+      commodity_items: "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
       nominal_idr: 72500,
       nonce: "b7c2d9e41f8a",
       issued_at: earlierRedeemedIso,
@@ -327,7 +327,7 @@ function buildInitialSeedState(): ClearinghouseState {
       beneficiary_id: "WGA-0404",
       merchant_id: "WRG-01",
       merchant_name: "Warung Kelontong Berkah Bu Yati",
-      commodity_name: "Local Rice Staple Pack (5 Kg)",
+      commodity_name: "Paket Beras Lokal Medium (5 Kg)",
       nominal_idr: 72500,
       hmac_signature: v4Sig,
       prev_hash: GENESIS_HASH,
@@ -355,7 +355,7 @@ function buildInitialSeedState(): ClearinghouseState {
       id: "STL-2026-B42C11",
       merchant_id: "WRG-02",
       merchant_name: "Toko Sembako Pak Asep Mandiri",
-      bank_account: "Bank BJB Micro / QRIS •• 9012",
+      bank_account: "Bank BJB Mikro / QRIS •• 9012",
       voucher_count: 3,
       total_amount_idr: 350000,
       batch_hash: crypto
@@ -376,7 +376,7 @@ function buildInitialSeedState(): ClearinghouseState {
       merchant_name: "Warung Kelontong Berkah Bu Yati",
       outcome: "SYNCED",
       reason:
-        "Offline redemption verified via HMAC-SHA256 and committed to hash-chained ledger.",
+        "Penukaran offline terverifikasi melalui HMAC-SHA256 dan dicatat ke buku besar rantai hash.",
       processed_at: earlierRedeemedIso,
     },
   ];
@@ -400,7 +400,11 @@ export function loadClearinghouseState(): ClearinghouseState {
     if (fs.existsSync(STATE_FILE)) {
       const raw = fs.readFileSync(STATE_FILE, "utf8");
       const parsed = JSON.parse(raw) as Partial<ClearinghouseState>;
-      if (parsed && Array.isArray(parsed.beneficiaries) && parsed.beneficiaries.length > 0) {
+      if (
+        parsed &&
+        Array.isArray(parsed.beneficiaries) &&
+        parsed.beneficiaries.length > 0
+      ) {
         return {
           pool_total_idr: parsed.pool_total_idr ?? 8500000,
           fraud_blocked_count: parsed.fraud_blocked_count ?? 0,
