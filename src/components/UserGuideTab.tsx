@@ -94,7 +94,7 @@ const FEATURE_GUIDES: FeatureGuideItem[] = [
       {
         title: "Tukar di Kedai Mitra",
         detail:
-          "Bawa HP atau kertas kupon ke kedai terdaftar di Balige, Laguboti, Sitoluama, atau Porsea.",
+          "Bawa HP atau kertas kupon ke kedai sembako mitra terdekat di wilayah Anda.",
       },
     ],
     proTip:

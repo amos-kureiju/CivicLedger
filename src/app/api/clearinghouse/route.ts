@@ -10,8 +10,10 @@ import {
   verifyLedgerChainNode,
 } from "@/lib/server-ledger";
 import { GENESIS_HASH } from "@/lib/crypto";
+import { emitClearinghouseUpdate } from "@/lib/realtime-bus";
 import {
   BatchSyncResultItem,
+  CommodityItem,
   LedgerEntry,
   ReconciliationLog,
   SettlementBatch,
@@ -88,6 +90,9 @@ export async function POST(req: NextRequest) {
       const goRes = await proxyToGoBackend(goActionMap[action], "POST", body);
       if (goRes) {
         const data = await goRes.json();
+        if (goRes.ok) {
+          emitClearinghouseUpdate(action);
+        }
         return NextResponse.json(data, { status: goRes.status });
       }
     }
@@ -97,7 +102,47 @@ export async function POST(req: NextRequest) {
 
     if (action === "RESET_DEMO") {
       const fresh = resetClearinghouseState();
+      emitClearinghouseUpdate("RESET_DEMO");
       return NextResponse.json({ ok: true, state: fresh });
+    }
+
+    if (action === "TOPUP_POOL") {
+      const amount = Number(body.amount_idr);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return NextResponse.json(
+          { error: "Nominal tambah dana harus lebih dari Rp 0." },
+          { status: 400 }
+        );
+      }
+      state.pool_total_idr += Math.round(amount);
+      saveClearinghouseState(state);
+      emitClearinghouseUpdate("TOPUP_POOL");
+      return NextResponse.json({ ok: true, state });
+    }
+
+    if (action === "ADD_COMMODITY") {
+      const { name, items, nominal_idr } = body;
+      const nom = Number(nominal_idr);
+      if (!name || !items || !Number.isFinite(nom) || nom <= 0) {
+        return NextResponse.json(
+          { error: "Nama paket, isi barang, dan nominal wajib diisi." },
+          { status: 400 }
+        );
+      }
+      const code = `PKG-${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
+      const created: CommodityItem = {
+        code,
+        name: String(name).trim(),
+        items: String(items).trim(),
+        nominal_idr: Math.round(nom),
+      };
+      if (!Array.isArray(state.commodity_catalog)) {
+        state.commodity_catalog = [...COMMODITY_CATALOG];
+      }
+      state.commodity_catalog.push(created);
+      saveClearinghouseState(state);
+      emitClearinghouseUpdate("ADD_COMMODITY");
+      return NextResponse.json({ ok: true, commodity: created, state });
     }
 
     if (action === "ISSUE_VOUCHER") {
@@ -110,7 +155,12 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const cat = COMMODITY_CATALOG.find((c) => c.code === commodity_code);
+      const catalogList =
+        Array.isArray(state.commodity_catalog) &&
+        state.commodity_catalog.length > 0
+          ? state.commodity_catalog
+          : COMMODITY_CATALOG;
+      const cat = catalogList.find((c) => c.code === commodity_code);
       if (!cat) {
         return NextResponse.json(
           { error: "Paket komoditas yang dipilih tidak valid." },
@@ -158,6 +208,7 @@ export async function POST(req: NextRequest) {
       state.vouchers.unshift(newVoucher);
       state.pool_total_idr = Math.max(0, state.pool_total_idr - cat.nominal_idr);
       saveClearinghouseState(state);
+      emitClearinghouseUpdate("ISSUE_VOUCHER");
 
       return NextResponse.json({
         ok: true,
@@ -185,6 +236,7 @@ export async function POST(req: NextRequest) {
       };
       state.beneficiaries.push(newBen);
       saveClearinghouseState(state);
+      emitClearinghouseUpdate("ADD_BENEFICIARY");
       return NextResponse.json({ ok: true, beneficiary: newBen, state });
     }
 
@@ -201,7 +253,7 @@ export async function POST(req: NextRequest) {
         id: `WRG-${nextNum}`,
         name: String(name).trim(),
         owner: String(owner).trim(),
-        rt_rw: String(rt_rw || "Laguboti, Kab. Toba").trim(),
+        rt_rw: String(rt_rw || "Wilayah Mitra").trim(),
         bank_account: String(bank_account || "BRI / QRIS •• 0000").trim(),
         unsettled_balance_idr: 0,
         total_settled_idr: 0,
@@ -209,6 +261,7 @@ export async function POST(req: NextRequest) {
       };
       state.merchants.push(newMerchant);
       saveClearinghouseState(state);
+      emitClearinghouseUpdate("ADD_MERCHANT");
       return NextResponse.json({ ok: true, merchant: newMerchant, state });
     }
 
@@ -338,6 +391,7 @@ export async function POST(req: NextRequest) {
 
       state.ledger.unshift(entry);
       saveClearinghouseState(state);
+      emitClearinghouseUpdate("REDEEM_VOUCHER");
 
       return NextResponse.json({
         ok: true,
@@ -501,6 +555,7 @@ export async function POST(req: NextRequest) {
       }
 
       saveClearinghouseState(state);
+      emitClearinghouseUpdate("BATCH_SYNC");
       const syncedCount = results.filter((r) => r.status === "SYNCED").length;
       const conflictCount = results.filter((r) => r.status === "CONFLICT").length;
 
@@ -575,6 +630,7 @@ export async function POST(req: NextRequest) {
       }
 
       saveClearinghouseState(state);
+      emitClearinghouseUpdate("SETTLE_MERCHANTS");
       return NextResponse.json({
         ok: true,
         batches: createdBatches,

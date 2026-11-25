@@ -1,17 +1,29 @@
 {
-  "name": "CivicLedger — Local Voucher Clearinghouse",
+  "name": "CivicLedger — Kupon Sembako Masyarakat",
   "short_name": "CivicLedger",
-  "description": "Offline-first voucher clearinghouse for community mutual aid by Team Run.exe (STACK 2026 - Case 2)",
+  "description": "Platform pembagian dan penukaran kupon sembako komunitas yang tetap berjalan saat offline (Tim Run.exe — STACK 2026)",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#FAF7F2",
+  "theme_color": "#1B6B50",
   "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

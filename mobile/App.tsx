@@ -42,6 +42,7 @@ import MerchantPosScreen from "./src/screens/MerchantPosScreen";
 import KedaiScreen from "./src/screens/KedaiScreen";
 import HistoryScreen from "./src/screens/HistoryScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
+import BrandLogo from "./src/components/BrandLogo";
 
 type TabId = "home" | "voucher" | "pos" | "kedai" | "history" | "profile";
 
@@ -192,6 +193,15 @@ function CivicLedgerMobileApp() {
       active = false;
     };
   }, []);
+
+  // Sinkronisasi realtime otomatis tiap 4 detik saat Online (agar data Mobile selalu live)
+  useEffect(() => {
+    if (booting || !user || prefs.isOfflineMode) return;
+    const timer = setInterval(() => {
+      void refreshClearinghouse();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [booting, user, prefs.isOfflineMode, refreshClearinghouse]);
 
   const bottomTabs = useMemo(() => {
     if (!user) return [];
@@ -593,15 +603,7 @@ function CivicLedgerMobileApp() {
           ]}
         >
           <View style={styles.topLeft}>
-            <View
-              style={[styles.brandIcon, { backgroundColor: palette.primary }]}
-            >
-              <Ionicons
-                name="leaf-outline"
-                size={17}
-                color={palette.primaryText}
-              />
-            </View>
+            <BrandLogo size={34} />
             <Text
               numberOfLines={1}
               style={{

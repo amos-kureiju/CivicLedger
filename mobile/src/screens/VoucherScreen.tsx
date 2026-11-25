@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { Ionicons } from "@expo/vector-icons";
+import BrandLogo from "../components/BrandLogo";
 import { AppPalette, fs } from "../theme";
 import { AuthUser, Voucher } from "../types";
 import { encodeVoucherToQRPayload } from "../crypto";
@@ -147,7 +148,7 @@ export default function VoucherScreen({
             ]}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons name="leaf-outline" size={16} color={palette.primary} />
+              <BrandLogo size={20} />
               <Text
                 style={{
                   color: palette.primary,

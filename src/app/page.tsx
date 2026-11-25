@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import QRCode from "qrcode";
+import jsQR from "jsqr";
 import {
   LayoutGrid,
   QrCode,
@@ -9,42 +10,14 @@ import {
   Landmark,
   BarChart3,
   BookOpen,
-  Plus,
-  Search,
-  Copy,
-  Check,
-  Printer,
-  Camera,
-  CameraOff,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
-  ShieldAlert,
-  AlertTriangle,
   X,
-  ArrowUpRight,
   Sun,
   Moon,
-  Wallet,
-  Ticket,
-  Store,
-  UserCheck,
-  UserPlus,
-  MapPin,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  Info,
-  Receipt,
-  Send,
-  Lock,
-  Download,
-  HeartHandshake,
   LogOut,
   KeyRound,
   Type,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import {
   AuthUser,
@@ -58,7 +31,6 @@ import {
   Merchant,
   OfflineRedemptionQueueItem,
   ReconciliationLog,
-  ReconciliationOutcome,
   SettlementBatch,
   Voucher,
   VoucherStatus,
@@ -85,7 +57,20 @@ import {
   buildClientFallbackState,
   DEFAULT_COMMODITY_CATALOG,
 } from "@/lib/client-seed";
+import { AppLang, UI_COPY } from "@/lib/i18n";
+import {
+  CryptoVerificationTrace,
+  formatDateTime,
+  formatOutcomeLabel,
+  formatRupiah,
+} from "@/lib/formatters";
 import AuthGate from "@/components/AuthGate";
+import BrandLogo from "@/components/BrandLogo";
+import CoordinatorTab from "@/components/CoordinatorTab";
+import BeneficiaryTab from "@/components/BeneficiaryTab";
+import MerchantPosTab from "@/components/MerchantPosTab";
+import ClearinghouseTab from "@/components/ClearinghouseTab";
+import PasswordModal from "@/components/PasswordModal";
 import ReportsComplianceTab from "@/components/ReportsComplianceTab";
 import UserGuideTab from "@/components/UserGuideTab";
 
@@ -99,112 +84,25 @@ type ActiveTab =
 
 type ThemeMode = "light" | "dark";
 
-interface CryptoVerificationTrace {
-  timestamp: string;
-  durationMs: number;
-  clientTxId: string;
-  voucherId: string;
-  shortCode: string;
-  beneficiaryName: string;
-  commodityName: string;
-  nominalIdr: number;
-  canonicalMessage: string;
-  providedSignature: string;
-  computedSignature: string;
-  hmacValid: boolean;
-  doubleSpendCheckPassed: boolean;
-  expiryCheckPassed: boolean;
-  mode: "ONLINE" | "OFFLINE_INDEXEDDB";
-  receiptHash?: string;
-  errorReason?: string;
-}
-
-const TAB_META: Record<ActiveTab, { title: string; subtitle: string }> = {
-  COORDINATOR: {
-    title: "Beranda Pengurus",
-    subtitle: "Kelola dana bansos, daftar penerima, dan kupon sembako.",
-  },
-  BENEFICIARY: {
-    title: "Kupon Warga",
-    subtitle: "Tunjukkan QR atau kode kupon ini saat mengambil sembako di kedai.",
-  },
-  MERCHANT_POS: {
-    title: "Kasir Kedai",
-    subtitle: "Scan QR atau ketik kode kupon warga. Bisa dipakai saat offline.",
-  },
-  CLEARINGHOUSE: {
-    title: "Pencairan & Riwayat",
-    subtitle: "Cairkan saldo kedai dan cek riwayat penukaran kupon.",
-  },
-  REPORTS: {
-    title: "Laporan Bansos",
-    subtitle: "Ringkasan pembagian sembako dan unduh laporan Excel atau JSON.",
-  },
-  GUIDE: {
-    title: "Cara Pakai",
-    subtitle: "Langkah penggunaan tiap menu di CivicLedger.",
-  },
-};
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function formatDateTime(iso: string): string {
+function playScanBeep() {
   try {
-    return new Date(iso).toLocaleString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.12;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.11);
   } catch {
-    return iso;
-  }
-}
-
-function formatShortTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function formatStatusLabel(status: VoucherStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "Siap Pakai";
-    case "REDEEMED":
-      return "Sudah Dipakai";
-    case "SETTLED":
-      return "Sudah Cair";
-    case "EXPIRED":
-      return "Kedaluwarsa";
-  }
-}
-
-function formatOutcomeLabel(outcome: ReconciliationOutcome): string {
-  switch (outcome) {
-    case "SYNCED":
-      return "Masuk";
-    case "DUPLICATE_CONFLICT":
-      return "Ditolak (Ganda)";
-    case "INVALID_SIGNATURE":
-      return "Ditolak (Palsu)";
-    case "EXPIRED":
-      return "Ditolak (Habis)";
-    case "NOT_FOUND":
-      return "Tidak Ditemukan";
+    // Abaikan jika audio diblokir browser
   }
 }
 
@@ -212,11 +110,13 @@ export default function CivicLedgerApp() {
   const [mounted, setMounted] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [lang, setLang] = useState<AppLang>("id");
   const [activeTab, setActiveTab] = useState<ActiveTab>("COORDINATOR");
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [largeText, setLargeText] = useState<boolean>(false);
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [swRegistered, setSwRegistered] = useState<boolean>(false);
+  const [realtimeConnected, setRealtimeConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [backendEngine, setBackendEngine] =
     useState<BackendEngineType>("NEXTJS_FALLBACK");
@@ -341,17 +241,16 @@ export default function CivicLedgerApp() {
   );
 
   const applyAuthenticatedUser = useCallback((user: AuthUser) => {
+    if (user.role !== "COORDINATOR" && user.role !== "MERCHANT") return;
     setCurrentUser(user);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("civicledger_last_user", JSON.stringify(user));
     }
     if (user.role === "MERCHANT") {
       setActiveTab("MERCHANT_POS");
-      if (user.linked_merchant_id) setActiveMerchantId(user.linked_merchant_id);
-    } else if (user.role === "BENEFICIARY") {
-      setActiveTab("BENEFICIARY");
-      if (user.linked_beneficiary_id)
-        setWalletBeneficiaryId(user.linked_beneficiary_id);
+      if (user.linked_merchant_id) {
+        setActiveMerchantId(user.linked_merchant_id);
+      }
     } else {
       setActiveTab("COORDINATOR");
     }
@@ -371,13 +270,21 @@ export default function CivicLedgerApp() {
     setLargeText(isLarge);
     document.documentElement.classList.toggle("text-large", isLarge);
 
+    const savedLang = window.localStorage.getItem("civicledger_lang_v1");
+    if (savedLang === "en" || savedLang === "id") {
+      setLang(savedLang);
+    }
+
     fetch("/api/auth", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        if (data?.authenticated && data?.user) {
+        if (
+          data?.authenticated &&
+          (data?.user?.role === "COORDINATOR" || data?.user?.role === "MERCHANT")
+        ) {
           applyAuthenticatedUser(data.user);
         } else {
-          // Bersihkan cache user lama jika sesi tidak cocok
+          // Bersihkan cache user lama jika bukan akun pengurus/pemilik toko
           window.localStorage.removeItem("civicledger_last_user");
         }
       })
@@ -386,7 +293,10 @@ export default function CivicLedgerApp() {
           const cached = window.localStorage.getItem("civicledger_last_user");
           if (cached) {
             const parsed = JSON.parse(cached) as AuthUser;
-            if (parsed.email?.endsWith("@civicledger.id")) {
+            if (
+              (parsed.role === "COORDINATOR" || parsed.role === "MERCHANT") &&
+              parsed.email?.endsWith("@civicledger.id")
+            ) {
               applyAuthenticatedUser(parsed);
             }
           }
@@ -410,6 +320,13 @@ export default function CivicLedgerApp() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("civicledger_large_text", next ? "1" : "0");
       document.documentElement.classList.toggle("text-large", next);
+    }
+  };
+
+  const updateLang = (next: AppLang) => {
+    setLang(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("civicledger_lang_v1", next);
     }
   };
 
@@ -551,7 +468,7 @@ export default function CivicLedgerApp() {
           .then(() => setSwRegistered(true))
           .catch(() => setSwRegistered(false));
       }
-      setCameraDetectSupported("BarcodeDetector" in window);
+      setCameraDetectSupported(true);
       const handleOffline = () => setIsOfflineMode(true);
       const handleOnline = () => {
         showToast(
@@ -610,6 +527,41 @@ export default function CivicLedgerApp() {
   useEffect(() => {
     fetchClearinghouseState();
   }, [fetchClearinghouseState]);
+
+  // Realtime SSE subscription: sinkronisasi otomatis antar Pengurus, Pemilik Toko, dan Mobile
+  useEffect(() => {
+    if (!currentUser || isOfflineMode || typeof window === "undefined") {
+      setRealtimeConnected(false);
+      return;
+    }
+
+    const es = new EventSource("/api/clearinghouse/stream");
+    es.onopen = () => {
+      setRealtimeConnected(true);
+    };
+    es.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as {
+          type?: string;
+          state?: Partial<ClearinghouseState>;
+        };
+        if (payload?.state) {
+          void applyServerState(payload.state, true);
+          setLoading(false);
+        }
+      } catch {
+        // Abaikan pesan heartbeat/parse error
+      }
+    };
+    es.onerror = () => {
+      setRealtimeConnected(false);
+    };
+
+    return () => {
+      es.close();
+      setRealtimeConnected(false);
+    };
+  }, [currentUser, isOfflineMode, applyServerState]);
 
   useEffect(() => {
     const benVouchers = vouchers.filter(
@@ -671,52 +623,145 @@ export default function CivicLedgerApp() {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
       mediaStreamRef.current = stream;
       setCameraActive(true);
+      setCameraDetectSupported(true);
+
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          void videoRef.current.play().catch(() => {});
         }
-        const win = window as unknown as {
-          BarcodeDetector?: new (opts: { formats: string[] }) => {
-            detect: (
-              source: HTMLVideoElement
-            ) => Promise<Array<{ rawValue: string }>>;
-          };
-        };
-        if (win.BarcodeDetector && videoRef.current) {
-          const detector = new win.BarcodeDetector({ formats: ["qr_code"] });
-          scanTimerRef.current = window.setInterval(async () => {
-            if (!videoRef.current || videoRef.current.readyState < 2) return;
-            try {
-              const codes = await detector.detect(videoRef.current);
-              if (codes.length > 0 && codes[0].rawValue) {
-                const decoded = decodeVoucherQRPayload(codes[0].rawValue);
-                if (decoded) {
-                  setScannedQRPayloadRaw(codes[0].rawValue);
-                  setScannerInputCode(decoded.code);
-                  stopCamera();
-                  showToast(
-                    "success",
-                    `QR ${decoded.code} terbaca. Klik Cek & Terima Kupon.`
-                  );
-                }
-              }
-            } catch {
-              // Abaikan error frame sementara
-            }
-          }, 500);
-        }
+
+        const offscreenCanvas = document.createElement("canvas");
+        const ctx = offscreenCanvas.getContext("2d", {
+          willReadFrequently: true,
+        });
+
+        scanTimerRef.current = window.setInterval(() => {
+          const video = videoRef.current;
+          if (
+            !video ||
+            !ctx ||
+            video.readyState < 2 ||
+            video.videoWidth === 0 ||
+            video.videoHeight === 0
+          ) {
+            return;
+          }
+
+          offscreenCanvas.width = video.videoWidth;
+          offscreenCanvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+
+          const imageData = ctx.getImageData(
+            0,
+            0,
+            offscreenCanvas.width,
+            offscreenCanvas.height
+          );
+          const qrResult = jsQR(
+            imageData.data,
+            imageData.width,
+            imageData.height,
+            { inversionAttempts: "dontInvert" }
+          );
+
+          if (qrResult && qrResult.data) {
+            const rawText = qrResult.data.trim();
+            const decoded = decodeVoucherQRPayload(rawText);
+            const resolvedCode = decoded ? decoded.code : rawText.toUpperCase();
+
+            playScanBeep();
+            stopCamera();
+            setScannedQRPayloadRaw(decoded ? rawText : "");
+            setScannerInputCode(resolvedCode);
+            showToast(
+              "success",
+              lang === "en"
+                ? `QR ${resolvedCode} scanned. Verifying voucher automatically...`
+                : `QR ${resolvedCode} terbaca dari kamera! Memverifikasi kupon otomatis...`
+            );
+            void handleVerifyAndRedeem(
+              false,
+              decoded ? rawText : "",
+              resolvedCode
+            );
+          }
+        }, 180);
       }, 150);
     } catch {
       showToast(
         "warning",
-        "Kamera tidak bisa dibuka. Pilih kupon di daftar cepat atau ketik kodenya langsung."
+        lang === "en"
+          ? "Cannot access camera. Allow browser camera permission, upload a QR photo, or type the code."
+          : "Kamera tidak bisa dibuka. Izinkan akses kamera di browser, unggah foto QR, atau ketik kodenya langsung."
       );
     }
+  };
+
+  const handleUploadQrFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const qrResult = jsQR(
+          imageData.data,
+          imageData.width,
+          imageData.height,
+          { inversionAttempts: "attemptBoth" }
+        );
+
+        if (!qrResult || !qrResult.data) {
+          showToast(
+            "warning",
+            lang === "en"
+              ? "No QR code detected in the uploaded image. Try a clearer photo."
+              : "QR tidak terbaca di gambar tersebut. Coba foto QR yang lebih jelas."
+          );
+          return;
+        }
+
+        const rawText = qrResult.data.trim();
+        const decoded = decodeVoucherQRPayload(rawText);
+        const resolvedCode = decoded ? decoded.code : rawText.toUpperCase();
+
+        playScanBeep();
+        setScannedQRPayloadRaw(decoded ? rawText : "");
+        setScannerInputCode(resolvedCode);
+        showToast(
+          "success",
+          lang === "en"
+            ? `QR ${resolvedCode} read from image. Verifying automatically...`
+            : `QR ${resolvedCode} terbaca dari foto! Memverifikasi kupon...`
+        );
+        void handleVerifyAndRedeem(false, decoded ? rawText : "", resolvedCode);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
   };
 
   // ==================== AKSI UTAMA ====================
@@ -831,6 +876,73 @@ export default function CivicLedgerApp() {
     }
   };
 
+  const handleTopupPool = async (amountIdr: number) => {
+    if (isOfflineMode) {
+      showToast("warning", "Ubah Sinyal ke Online untuk menambah dana bansos.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/clearinghouse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "TOPUP_POOL",
+          amount_idr: amountIdr,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menambah dana");
+      await applyServerState(data.state);
+      showToast(
+        "success",
+        `Dana bansos bertambah ${formatRupiah(amountIdr)} secara realtime.`
+      );
+    } catch (err: unknown) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Gagal menambah dana bansos"
+      );
+    }
+  };
+
+  const handleAddCommodity = async (params: {
+    name: string;
+    items: string;
+    nominal_idr: number;
+  }) => {
+    if (isOfflineMode) {
+      showToast("warning", "Ubah Sinyal ke Online untuk menambah paket baru.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/clearinghouse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ADD_COMMODITY",
+          name: params.name,
+          items: params.items,
+          nominal_idr: params.nominal_idr,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menambah paket");
+      await applyServerState(data.state);
+      if (data.commodity?.code) {
+        setSelectedCommodityCode(data.commodity.code);
+      }
+      showToast(
+        "success",
+        `Paket baru "${params.name}" (${formatRupiah(params.nominal_idr)}) berhasil ditambahkan.`
+      );
+    } catch (err: unknown) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Gagal menambah paket sembako"
+      );
+    }
+  };
+
   const sendVoucherToMerchantScanner = (voucher: Voucher) => {
     const qrPayload = encodeVoucherToQRPayload(voucher);
     setScannedQRPayloadRaw(qrPayload);
@@ -851,7 +963,11 @@ export default function CivicLedgerApp() {
     showToast("info", `Teks SMS untuk kupon ${voucher.short_code} disalin.`);
   };
 
-  const handleVerifyAndRedeem = async (simulateTamperFraud = false) => {
+  const handleVerifyAndRedeem = async (
+    simulateTamperFraud = false,
+    overrideQrRaw?: string,
+    overrideCode?: string
+  ) => {
     const t0 = performance.now();
     const merchant =
       merchants.find((m) => m.id === activeMerchantId) || merchants[0];
@@ -860,9 +976,14 @@ export default function CivicLedgerApp() {
       return;
     }
 
+    const effectiveQrRaw =
+      overrideQrRaw !== undefined ? overrideQrRaw : scannedQRPayloadRaw;
+    const effectiveCode =
+      overrideCode !== undefined ? overrideCode : scannerInputCode;
+
     let targetVoucher: Voucher | null = null;
-    const decodedQR = scannedQRPayloadRaw
-      ? decodeVoucherQRPayload(scannedQRPayloadRaw)
+    const decodedQR = effectiveQrRaw
+      ? decodeVoucherQRPayload(effectiveQrRaw)
       : null;
 
     if (decodedQR) {
@@ -882,8 +1003,8 @@ export default function CivicLedgerApp() {
         hmac_signature: decodedQR.sig,
         status: "ACTIVE",
       };
-    } else if (scannerInputCode.trim()) {
-      const cleanCode = scannerInputCode.trim().toUpperCase();
+    } else if (effectiveCode.trim()) {
+      const cleanCode = effectiveCode.trim().toUpperCase();
       const found = vouchers.find(
         (v) =>
           v.short_code.toUpperCase() === cleanCode ||
@@ -1425,6 +1546,8 @@ export default function CivicLedgerApp() {
         ? "Go Lokal"
         : "Lokal";
 
+  const t = UI_COPY[lang];
+
   const allNavItems: Array<{
     id: ActiveTab;
     label: string;
@@ -1433,50 +1556,62 @@ export default function CivicLedgerApp() {
     badge?: number;
     roles: Array<AuthUser["role"]>;
   }> = [
-      {
-        id: "COORDINATOR",
-        label: "Beranda Pengurus",
-        section: "OPERATIONS",
-        icon: LayoutGrid,
-        roles: ["COORDINATOR"],
-      },
-      {
-        id: "BENEFICIARY",
-        label: "Kupon Warga",
-        section: "OPERATIONS",
-        icon: QrCode,
-        roles: ["COORDINATOR", "BENEFICIARY"],
-      },
-      {
-        id: "MERCHANT_POS",
-        label: "Kasir Kedai",
-        section: "OPERATIONS",
-        icon: ScanLine,
-        badge: offlineQueue.length,
-        roles: ["COORDINATOR", "MERCHANT"],
-      },
-      {
-        id: "CLEARINGHOUSE",
-        label: "Pencairan & Riwayat",
-        section: "CLEARINGHOUSE",
-        icon: Landmark,
-        roles: ["COORDINATOR", "MERCHANT"],
-      },
-      {
-        id: "REPORTS",
-        label: "Laporan Bansos",
-        section: "CLEARINGHOUSE",
-        icon: BarChart3,
-        roles: ["COORDINATOR"],
-      },
-      {
-        id: "GUIDE",
-        label: "Cara Pakai",
-        section: "CLEARINGHOUSE",
-        icon: BookOpen,
-        roles: ["COORDINATOR", "MERCHANT", "BENEFICIARY"],
-      },
-    ];
+    {
+      id: "COORDINATOR",
+      label: t.tabs.COORDINATOR.label,
+      section: "OPERATIONS",
+      icon: LayoutGrid,
+      roles: ["COORDINATOR"],
+    },
+    {
+      id: "BENEFICIARY",
+      label: lang === "en" ? "Print Voucher Slip" : "Cetak Slip Kupon",
+      section: "OPERATIONS",
+      icon: QrCode,
+      roles: ["COORDINATOR"],
+    },
+    {
+      id: "MERCHANT_POS",
+      label:
+        currentUser?.role === "MERCHANT"
+          ? lang === "en"
+            ? "POS & QR Scanner"
+            : "Kasir & Scan QR"
+          : lang === "en"
+            ? "POS Simulator (PWA)"
+            : "Simulasi Kasir (PWA)",
+      section: "OPERATIONS",
+      icon: ScanLine,
+      badge: offlineQueue.length,
+      roles: ["COORDINATOR", "MERCHANT"],
+    },
+    {
+      id: "CLEARINGHOUSE",
+      label:
+        currentUser?.role === "MERCHANT"
+          ? lang === "en"
+            ? "Balance & History"
+            : "Saldo & Riwayat"
+          : t.tabs.CLEARINGHOUSE.label,
+      section: "CLEARINGHOUSE",
+      icon: Landmark,
+      roles: ["COORDINATOR", "MERCHANT"],
+    },
+    {
+      id: "REPORTS",
+      label: t.tabs.REPORTS.label,
+      section: "CLEARINGHOUSE",
+      icon: BarChart3,
+      roles: ["COORDINATOR"],
+    },
+    {
+      id: "GUIDE",
+      label: t.tabs.GUIDE.label,
+      section: "CLEARINGHOUSE",
+      icon: BookOpen,
+      roles: ["COORDINATOR", "MERCHANT"],
+    },
+  ];
 
   const navItems = currentUser
     ? allNavItems.filter((item) => item.roles.includes(currentUser.role))
@@ -1491,7 +1626,7 @@ export default function CivicLedgerApp() {
         suppressHydrationWarning
         className="min-h-screen bg-canvas flex items-center justify-center text-sm text-ink-muted"
       >
-        Memuat halaman...
+        {lang === "en" ? "Loading..." : "Memuat halaman..."}
       </div>
     );
   }
@@ -1499,8 +1634,10 @@ export default function CivicLedgerApp() {
   if (!currentUser) {
     return (
       <AuthGate
+        lang={lang}
         theme={theme}
         largeText={largeText}
+        onToggleLang={updateLang}
         onToggleTheme={updateTheme}
         onToggleLargeText={updateLargeText}
         onAuthenticated={(user) => {
@@ -1523,14 +1660,18 @@ export default function CivicLedgerApp() {
       <aside className="no-print hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-surface border-r border-line/70 z-30 select-none">
         <div className="h-16 px-4 flex items-center justify-between border-b border-line/60">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-cta-bg text-cta-ink flex items-center justify-center shrink-0 shadow-sm">
-              <HeartHandshake className="w-4 h-4" />
-            </div>
+            <BrandLogo size={34} className="shrink-0 shadow-sm rounded-xl" />
             <div>
               <span className="font-bold text-[15px] tracking-[-0.015em] text-ink-primary block leading-tight">
                 CivicLedger
               </span>
-              <span className="text-[11px] text-ink-muted">Kupon Sembako</span>
+              <span className="text-[11px] text-ink-muted">
+                {currentUser.role === "MERCHANT"
+                  ? lang === "en"
+                    ? "Store Owner Portal"
+                    : "Portal Pemilik Toko"
+                  : t.portalSub}
+              </span>
             </div>
           </div>
         </div>
@@ -1730,7 +1871,9 @@ export default function CivicLedgerApp() {
             </div>
 
             <div className="flex items-center justify-between gap-2 text-xs text-ink-secondary">
-              <span className="font-medium">Huruf</span>
+              <span className="font-medium">
+                {lang === "en" ? "Text" : "Huruf"}
+              </span>
               <div className="flex bg-nested p-0.5 rounded-lg border border-line/60">
                 <button
                   type="button"
@@ -1750,7 +1893,35 @@ export default function CivicLedgerApp() {
                       : "text-ink-muted hover:text-ink-primary"
                     }`}
                 >
-                  Besar
+                  {lang === "en" ? "Large" : "Besar"}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 text-xs text-ink-secondary">
+              <span className="font-medium">
+                {lang === "en" ? "Language" : "Bahasa"}
+              </span>
+              <div className="flex bg-nested p-0.5 rounded-lg border border-line/60">
+                <button
+                  type="button"
+                  onClick={() => updateLang("id")}
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${lang === "id"
+                      ? "bg-card text-ink-primary shadow-sm"
+                      : "text-ink-muted hover:text-ink-primary"
+                    }`}
+                >
+                  ID
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateLang("en")}
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${lang === "en"
+                      ? "bg-card text-ink-primary shadow-sm"
+                      : "text-ink-muted hover:text-ink-primary"
+                    }`}
+                >
+                  EN
                 </button>
               </div>
             </div>
@@ -1764,6 +1935,29 @@ export default function CivicLedgerApp() {
               <span>Server</span>
               <span className="font-mono text-ink-secondary truncate">
                 {engineShortText}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span>Database</span>
+              <span
+                className={`inline-flex items-center gap-1 font-semibold ${
+                  realtimeConnected && !isOfflineMode
+                    ? "text-emeraldTech"
+                    : "text-amberTech"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    realtimeConnected && !isOfflineMode
+                      ? "bg-emeraldTech animate-pulse"
+                      : "bg-amberTech"
+                  }`}
+                />
+                {isOfflineMode
+                  ? "Offline"
+                  : realtimeConnected
+                    ? "Realtime"
+                    : "Menyambung..."}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -1792,15 +1986,13 @@ export default function CivicLedgerApp() {
       <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
         <header className="no-print sticky top-0 z-20 h-16 bg-surface/92 backdrop-blur-md border-b border-line/60 px-4 sm:px-6 flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-3">
-            <div className="lg:hidden w-8 h-8 rounded-xl bg-cta-bg text-cta-ink flex items-center justify-center shrink-0">
-              <HeartHandshake className="w-4 h-4" />
-            </div>
+            <BrandLogo size={34} className="lg:hidden shrink-0 rounded-xl shadow-sm" />
             <div className="truncate">
               <div className="text-[15px] font-bold tracking-[-0.015em] text-ink-primary truncate">
-                {TAB_META[activeTab].title}
+                {t.tabs[activeTab].title}
               </div>
               <div className="hidden sm:block text-xs text-ink-muted truncate">
-                {TAB_META[activeTab].subtitle}
+                {t.tabs[activeTab].subtitle}
               </div>
             </div>
           </div>
@@ -1862,8 +2054,17 @@ export default function CivicLedgerApp() {
               title="Seluruh data di website ini adalah data contoh simulasi untuk STACK 2026."
               className="hidden md:inline-flex items-center px-3 py-1.5 rounded-full bg-nested border border-line/60 text-[11px] font-semibold text-ink-secondary"
             >
-              Data Simulasi
+              {t.simBadge}
             </span>
+
+            <button
+              type="button"
+              onClick={() => updateLang(lang === "id" ? "en" : "id")}
+              title="Switch Language ID/EN"
+              className="inline-flex items-center justify-center px-2.5 h-9 rounded-lg bg-card hover:bg-nested border border-line text-xs font-bold text-ink-primary transition"
+            >
+              {lang === "id" ? "EN" : "ID"}
+            </button>
 
             <span className="hidden xl:inline-flex items-center px-3 py-1.5 rounded-full bg-emeraldTech/12 border border-emeraldTech/30 font-mono text-[11px] font-semibold text-emeraldTech">
               STACK 2026 · Tim Run.exe
@@ -1964,2240 +2165,157 @@ export default function CivicLedgerApp() {
               </div>
             ) : (
               <>
-                {/* ============================================================
-                    TAB 1: BERANDA PENGURUS
-                   ============================================================ */}
+                {/* TAB 1: BERANDA PENGURUS */}
                 {activeTab === "COORDINATOR" && (
-                  <div className="space-y-6">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-emeraldTech">
-                          {currentUser.name} · {currentUser.role_label}
-                        </p>
-                        <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary mt-0.5">
-                          Ringkasan Penyaluran Bansos
-                        </h1>
-                        <p className="text-sm text-ink-secondary mt-0.5">
-                          Lihat sisa dana, daftar {beneficiaries.length} warga
-                          penerima, dan buat kupon sembako.
-                        </p>
-                      </div>
-                      <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-card border border-line/70 shadow-sm text-xs font-semibold text-ink-primary self-start md:self-auto">
-                        <span
-                          className={`w-2 h-2 rounded-full ${isOfflineMode
-                              ? "bg-amberTech"
-                              : "bg-emeraldTech animate-pulse"
-                            }`}
-                        />
-                        {isOfflineMode
-                          ? "Offline · Tersimpan di HP"
-                          : "Online · Terhubung"}
-                      </span>
-                    </div>
-
-                    {/* 4 Kartu Ringkasan */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-ink-secondary">
-                            Sisa Dana Bansos
-                          </span>
-                          <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
-                            <Wallet className="w-4 h-4" />
-                          </div>
-                        </div>
-                        <div>
-                          <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-                            {formatRupiah(poolTotalIdr)}
-                          </p>
-                          <p className="text-xs text-ink-muted mt-1">
-                            Khusus untuk paket sembako
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-ink-secondary">
-                            Kupon Siap Pakai
-                          </span>
-                          <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
-                            <Ticket className="w-4 h-4" />
-                          </div>
-                        </div>
-                        <div>
-                          <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-                            {activeVouchersCount}
-                          </p>
-                          <p className="text-xs text-ink-muted mt-1 tabular-nums">
-                            Dari {vouchers.length} kupon dibuat
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-ink-secondary">
-                            Belanja di Kedai
-                          </span>
-                          <div className="w-8 h-8 rounded-lg bg-amberTech/12 text-amberTech flex items-center justify-center">
-                            <Store className="w-4 h-4" />
-                          </div>
-                        </div>
-                        <div>
-                          <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-                            {formatRupiah(totalWarungTurnover)}
-                          </p>
-                          <p className="text-xs text-ink-muted mt-1 tabular-nums">
-                            {merchants.length} kedai mitra terdaftar
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-ink-secondary">
-                            Penerima Bansos
-                          </span>
-                          <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
-                            <UserCheck className="w-4 h-4" />
-                          </div>
-                        </div>
-                        <div>
-                          <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-                            {beneficiaries.length} Orang
-                          </p>
-                          <p
-                            className={`text-xs mt-1 flex items-center gap-1.5 font-medium tabular-nums ${fraudBlockedCount > 0
-                                ? "text-amberTech"
-                                : "text-emeraldTech"
-                              }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${fraudBlockedCount > 0
-                                  ? "bg-amberTech"
-                                  : "bg-emeraldTech"
-                                }`}
-                            />
-                            {fraudBlockedCount} kupon bermasalah ditolak
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 2-Column Workspace (5 : 7) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                      {/* LEFT PANEL: Buat Kupon */}
-                      <div className="lg:col-span-5 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
-                        <div className="p-5 border-b border-line/50 flex items-center justify-between gap-2 bg-surface/60">
-                          <div>
-                            <h2 className="text-base font-bold text-ink-primary">
-                              Buat Kupon Sembako
-                            </h2>
-                            <p className="text-xs text-ink-muted mt-0.5">
-                              Pilih nama penerima dan paket sembakonya
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowAddResidentForm(!showAddResidentForm);
-                                setShowAddMerchantForm(false);
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-nested hover:bg-elevated border border-line/60 text-xs font-semibold text-ink-primary transition"
-                            >
-                              <UserPlus className="w-3.5 h-3.5 text-emeraldTech" />
-                              + Warga
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowAddMerchantForm(!showAddMerchantForm);
-                                setShowAddResidentForm(false);
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-nested hover:bg-elevated border border-line/60 text-xs font-semibold text-ink-primary transition"
-                            >
-                              <Store className="w-3.5 h-3.5 text-amberTech" />
-                              + Kedai
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="p-5 space-y-4">
-                          {showAddResidentForm && (
-                            <form
-                              onSubmit={handleAddBeneficiary}
-                              className="p-4 rounded-xl bg-nested/60 border border-line/70 space-y-3"
-                            >
-                              <p className="text-sm font-bold text-ink-primary">
-                                Tambah Penerima Baru
-                              </p>
-                              <input
-                                type="text"
-                                required
-                                placeholder="Nama lengkap (misal: Mangasi Simatupang)"
-                                value={newResidentName}
-                                onChange={(e) =>
-                                  setNewResidentName(e.target.value)
-                                }
-                                className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                              />
-                              <div className="grid grid-cols-2 gap-2">
-                                <input
-                                  type="text"
-                                  value={newResidentRtRw}
-                                  onChange={(e) =>
-                                    setNewResidentRtRw(e.target.value)
-                                  }
-                                  placeholder="Desa / Kecamatan"
-                                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                                />
-                                <input
-                                  type="text"
-                                  value={newResidentCategory}
-                                  onChange={(e) =>
-                                    setNewResidentCategory(e.target.value)
-                                  }
-                                  placeholder="Kategori"
-                                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                                />
-                              </div>
-                              <input
-                                type="text"
-                                value={newResidentPhone}
-                                onChange={(e) =>
-                                  setNewResidentPhone(e.target.value)
-                                }
-                                placeholder="Nomor HP"
-                                className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                              />
-                              <div className="flex justify-end gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowAddResidentForm(false)}
-                                  className="px-3.5 py-2 rounded-lg text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                                >
-                                  Batal
-                                </button>
-                                <button
-                                  type="submit"
-                                  className="px-4 py-2 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold"
-                                >
-                                  Simpan
-                                </button>
-                              </div>
-                            </form>
-                          )}
-
-                          {showAddMerchantForm && (
-                            <form
-                              onSubmit={handleAddMerchant}
-                              className="p-4 rounded-xl bg-nested/60 border border-line/70 space-y-3"
-                            >
-                              <p className="text-sm font-bold text-ink-primary">
-                                Tambah Kedai Mitra
-                              </p>
-                              <input
-                                type="text"
-                                required
-                                placeholder="Nama kedai (misal: Kedai Sembako Balige)"
-                                value={newMerchantName}
-                                onChange={(e) =>
-                                  setNewMerchantName(e.target.value)
-                                }
-                                className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                              />
-                              <div className="grid grid-cols-2 gap-2">
-                                <input
-                                  type="text"
-                                  required
-                                  placeholder="Nama pemilik"
-                                  value={newMerchantOwner}
-                                  onChange={(e) =>
-                                    setNewMerchantOwner(e.target.value)
-                                  }
-                                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                                />
-                                <input
-                                  type="text"
-                                  value={newMerchantRtRw}
-                                  onChange={(e) =>
-                                    setNewMerchantRtRw(e.target.value)
-                                  }
-                                  placeholder="Alamat kedai"
-                                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                                />
-                              </div>
-                              <input
-                                type="text"
-                                value={newMerchantBank}
-                                onChange={(e) =>
-                                  setNewMerchantBank(e.target.value)
-                                }
-                                placeholder="Rekening / QRIS"
-                                className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                              />
-                              <div className="flex justify-end gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowAddMerchantForm(false)}
-                                  className="px-3.5 py-2 rounded-lg text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                                >
-                                  Batal
-                                </button>
-                                <button
-                                  type="submit"
-                                  className="px-4 py-2 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold"
-                                >
-                                  Simpan
-                                </button>
-                              </div>
-                            </form>
-                          )}
-
-                          <form
-                            onSubmit={handleIssueVoucher}
-                            className="space-y-4"
-                          >
-                            <div className="space-y-1.5">
-                              <label className="block text-xs font-bold text-ink-primary">
-                                1. Nama Penerima ({beneficiaries.length} warga)
-                              </label>
-                              <div className="relative">
-                                <select
-                                  value={selectedBeneficiaryId}
-                                  onChange={(e) =>
-                                    setSelectedBeneficiaryId(e.target.value)
-                                  }
-                                  className="w-full h-11 px-3.5 pr-9 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary appearance-none outline-none cursor-pointer"
-                                >
-                                  {beneficiaries.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                      {b.name} — {b.rt_rw}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-ink-muted pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="block text-xs font-bold text-ink-primary">
-                                2. Paket Sembako
-                              </label>
-                              <div className="space-y-2">
-                                {catalog.map((item) => {
-                                  const selected =
-                                    selectedCommodityCode === item.code;
-                                  return (
-                                    <label
-                                      key={item.code}
-                                      className={`flex items-start justify-between gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${selected
-                                          ? "bg-emeraldTech/8 border-cta-bg"
-                                          : "bg-surface border-line/60 hover:border-line hover:bg-nested/40"
-                                        }`}
-                                    >
-                                      <div className="flex items-start gap-2.5 min-w-0">
-                                        <input
-                                          type="radio"
-                                          name="commodity"
-                                          value={item.code}
-                                          checked={selected}
-                                          onChange={() =>
-                                            setSelectedCommodityCode(item.code)
-                                          }
-                                          className="mt-1 w-4 h-4 accent-cta-bg cursor-pointer"
-                                        />
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-semibold text-ink-primary leading-snug">
-                                            {item.name}
-                                          </p>
-                                          <p className="text-xs text-ink-secondary mt-0.5 leading-snug">
-                                            {item.items}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <span className="font-mono text-sm font-bold text-emeraldTech tabular-nums shrink-0">
-                                        {formatRupiah(item.nominal_idr)}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="block text-xs font-bold text-ink-primary">
-                                3. Masa Berlaku Kupon
-                              </label>
-                              <div className="relative">
-                                <select
-                                  value={validityHours}
-                                  onChange={(e) =>
-                                    setValidityHours(Number(e.target.value))
-                                  }
-                                  className="w-full h-11 px-3.5 pr-9 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary appearance-none outline-none cursor-pointer"
-                                >
-                                  <option value={24}>1 Hari (24 Jam)</option>
-                                  <option value={72}>3 Hari (72 Jam)</option>
-                                  <option value={168}>7 Hari</option>
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-ink-muted pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
-                              </div>
-                            </div>
-
-                            <button
-                              type="submit"
-                              className="w-full h-12 px-4 rounded-xl bg-cta-bg hover:opacity-90 active:scale-[0.99] text-cta-ink font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Buat Kupon Sembako
-                            </button>
-
-                            <p className="text-xs text-ink-secondary flex items-start gap-2 leading-relaxed">
-                              <ShieldCheck className="w-4 h-4 text-emeraldTech shrink-0 mt-0.5" />
-                              <span>
-                                Kupon diberi kode unik agar tidak bisa dipalsukan
-                                dan bisa dicek saat kedai offline.
-                              </span>
-                            </p>
-                          </form>
-                        </div>
-                      </div>
-
-                      {/* RIGHT PANEL: Switcher Daftar Kupon & Daftar 20 Penerima */}
-                      <div className="lg:col-span-7 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
-                        {/* Top View Switcher */}
-                        <div className="p-4 border-b border-line/50 bg-surface/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="inline-flex bg-nested p-1 rounded-xl border border-line/50 self-start">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCoordinatorRightView("VOUCHERS")
-                              }
-                              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${coordinatorRightView === "VOUCHERS"
-                                  ? "bg-card text-ink-primary shadow-sm"
-                                  : "text-ink-muted hover:text-ink-primary"
-                                }`}
-                            >
-                              Daftar Kupon ({vouchers.length})
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCoordinatorRightView("BENEFICIARIES")
-                              }
-                              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${coordinatorRightView === "BENEFICIARIES"
-                                  ? "bg-card text-ink-primary shadow-sm"
-                                  : "text-ink-muted hover:text-ink-primary"
-                                }`}
-                            >
-                              Daftar Penerima ({beneficiaries.length})
-                            </button>
-                          </div>
-
-                          {coordinatorRightView === "VOUCHERS" && (
-                            <div className="flex bg-nested p-1 rounded-xl border border-line/50 shrink-0 self-start sm:self-auto">
-                              {(
-                                [
-                                  { id: "ALL", label: "Semua" },
-                                  { id: "ACTIVE", label: "Siap Pakai" },
-                                  { id: "REDEEMED", label: "Dipakai" },
-                                  { id: "SETTLED", label: "Cair" },
-                                ] as const
-                              ).map((st) => (
-                                <button
-                                  key={st.id}
-                                  type="button"
-                                  onClick={() => setVoucherStatusFilter(st.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${voucherStatusFilter === st.id
-                                      ? "bg-card text-ink-primary shadow-sm"
-                                      : "text-ink-muted hover:text-ink-primary"
-                                    }`}
-                                >
-                                  {st.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {coordinatorRightView === "VOUCHERS" ? (
-                          <>
-                            <div className="p-3.5 bg-surface/40 border-b border-line/45">
-                              <div className="relative">
-                                <Search className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-                                <input
-                                  type="text"
-                                  value={voucherSearch}
-                                  onChange={(e) =>
-                                    setVoucherSearch(e.target.value)
-                                  }
-                                  placeholder="Cari kode kupon, nama warga, atau paket..."
-                                  className="w-full h-10 pl-10 pr-3.5 rounded-xl bg-card border border-line/70 focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left border-collapse">
-                                <thead>
-                                  <tr className="bg-nested/60 border-b border-line/50 text-xs font-semibold text-ink-secondary">
-                                    <th className="py-3 px-4">Kode Kupon</th>
-                                    <th className="py-3 px-3">Penerima</th>
-                                    <th className="py-3 px-3">Paket</th>
-                                    <th className="py-3 px-3">Status</th>
-                                    <th className="py-3 px-4 text-right">
-                                      Aksi
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-line/40 text-sm">
-                                  {filteredVouchers.map((v) => (
-                                    <tr
-                                      key={v.id}
-                                      className="hover:bg-nested/40 transition-colors"
-                                    >
-                                      <td className="py-3.5 px-4 whitespace-nowrap">
-                                        <div className="font-mono font-bold text-ink-primary">
-                                          {v.short_code}
-                                        </div>
-                                        <div className="font-mono text-[11px] text-ink-muted">
-                                          {v.id}
-                                        </div>
-                                      </td>
-                                      <td className="py-3.5 px-3">
-                                        <div className="font-semibold text-ink-primary leading-snug">
-                                          {v.beneficiary_name}
-                                        </div>
-                                        <div className="text-xs text-ink-muted">
-                                          {v.rt_rw}
-                                        </div>
-                                      </td>
-                                      <td className="py-3.5 px-3">
-                                        <div className="text-ink-body line-clamp-1 font-medium">
-                                          {v.commodity_name}
-                                        </div>
-                                        <div className="font-mono text-xs text-ink-secondary tabular-nums mt-0.5">
-                                          {formatRupiah(v.nominal_idr)}
-                                        </div>
-                                      </td>
-                                      <td className="py-3.5 px-3">
-                                        <span
-                                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${v.status === "ACTIVE"
-                                              ? "bg-emeraldTech/12 text-emeraldTech"
-                                              : v.status === "REDEEMED"
-                                                ? "bg-amberTech/12 text-amberTech"
-                                                : "bg-nested text-ink-secondary"
-                                            }`}
-                                        >
-                                          <span
-                                            className={`w-1.5 h-1.5 rounded-full ${v.status === "ACTIVE"
-                                                ? "bg-emeraldTech"
-                                                : v.status === "REDEEMED"
-                                                  ? "bg-amberTech"
-                                                  : "bg-ink-muted"
-                                              }`}
-                                          />
-                                          {formatStatusLabel(v.status)}
-                                        </span>
-                                        {v.redeemed_by_merchant_name && (
-                                          <div className="text-[11px] text-ink-muted mt-1 max-w-[180px] truncate">
-                                            {v.redeemed_by_merchant_name}
-                                          </div>
-                                        )}
-                                      </td>
-                                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                                        <div className="inline-flex items-center gap-1.5">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setWalletBeneficiaryId(
-                                                v.beneficiary_id
-                                              );
-                                              setSelectedVoucherForQR(v);
-                                              setActiveTab("BENEFICIARY");
-                                            }}
-                                            className="px-3 py-1.5 rounded-lg bg-nested hover:bg-elevated text-ink-primary border border-line/60 text-xs font-semibold transition"
-                                          >
-                                            Kartu
-                                          </button>
-                                          {v.status === "ACTIVE" && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                sendVoucherToMerchantScanner(v)
-                                              }
-                                              className="px-3 py-1.5 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold transition"
-                                            >
-                                              Tukar
-                                            </button>
-                                          )}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                  {filteredVouchers.length === 0 && (
-                                    <tr>
-                                      <td
-                                        colSpan={5}
-                                        className="py-10 text-center text-ink-muted text-sm"
-                                      >
-                                        Tidak ada kupon yang cocok.
-                                      </td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            <div className="px-4 py-3 bg-surface/60 border-t border-line/45 flex items-center justify-between text-xs text-ink-muted">
-                              <span className="tabular-nums">
-                                Menampilkan {filteredVouchers.length} dari{" "}
-                                {vouchers.length} kupon
-                              </span>
-                              <span className="font-semibold text-emeraldTech">
-                                Kupon Sembako
-                              </span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="p-3.5 bg-surface/40 border-b border-line/45">
-                              <div className="relative">
-                                <Search className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-                                <input
-                                  type="text"
-                                  value={beneficiarySearch}
-                                  onChange={(e) =>
-                                    setBeneficiarySearch(e.target.value)
-                                  }
-                                  placeholder="Cari nama warga, desa, atau kategori..."
-                                  className="w-full h-10 pl-10 pr-3.5 rounded-xl bg-card border border-line/70 focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="overflow-x-auto max-h-[540px] overflow-y-auto">
-                              <table className="w-full text-left border-collapse">
-                                <thead className="sticky top-0 z-10">
-                                  <tr className="bg-nested border-b border-line/50 text-xs font-semibold text-ink-secondary">
-                                    <th className="py-3 px-4">No / ID</th>
-                                    <th className="py-3 px-3">Nama &amp; Desa</th>
-                                    <th className="py-3 px-3">Kategori</th>
-                                    <th className="py-3 px-3 text-center">
-                                      Kupon
-                                    </th>
-                                    <th className="py-3 px-4 text-right">
-                                      Aksi
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-line/40 text-sm">
-                                  {filteredBeneficiaries.map((b, idx) => {
-                                    const countVouchers = vouchers.filter(
-                                      (v) => v.beneficiary_id === b.id
-                                    ).length;
-                                    return (
-                                      <tr
-                                        key={b.id}
-                                        className="hover:bg-nested/40 transition-colors"
-                                      >
-                                        <td className="py-3 px-4 whitespace-nowrap font-mono text-xs text-ink-muted">
-                                          <div className="font-bold text-ink-primary">
-                                            {idx + 1}. {b.id}
-                                          </div>
-                                          <div>{b.household_size} org</div>
-                                        </td>
-                                        <td className="py-3 px-3">
-                                          <div className="font-semibold text-ink-primary">
-                                            {b.name}
-                                          </div>
-                                          <div className="text-xs text-ink-muted">
-                                            {b.rt_rw} · {b.phone}
-                                          </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-xs text-ink-secondary">
-                                          {b.category}
-                                        </td>
-                                        <td className="py-3 px-3 text-center font-mono text-xs font-bold text-ink-primary">
-                                          {countVouchers}
-                                        </td>
-                                        <td className="py-3 px-4 text-right whitespace-nowrap">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setSelectedBeneficiaryId(b.id);
-                                              showToast(
-                                                "info",
-                                                `${b.name} dipilih di form kiri. Pilih paket lalu klik Buat Kupon Sembako.`
-                                              );
-                                            }}
-                                            className="px-3 py-1.5 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold transition"
-                                          >
-                                            Pilih
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            <div className="px-4 py-3 bg-surface/60 border-t border-line/45 flex items-center justify-between text-xs text-ink-muted">
-                              <span className="tabular-nums">
-                                Total {filteredBeneficiaries.length} dari{" "}
-                                {beneficiaries.length} penerima bansos
-                              </span>
-                              <span className="font-semibold text-emeraldTech">
-                                Data Simulasi Komunitas
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <CoordinatorTab
+                    lang={lang}
+                    currentUser={currentUser}
+                    isOfflineMode={isOfflineMode}
+                    poolTotalIdr={poolTotalIdr}
+                    activeVouchersCount={activeVouchersCount}
+                    totalWarungTurnover={totalWarungTurnover}
+                    fraudBlockedCount={fraudBlockedCount}
+                    beneficiaries={beneficiaries}
+                    merchants={merchants}
+                    vouchers={vouchers}
+                    catalog={catalog}
+                    filteredVouchers={filteredVouchers}
+                    filteredBeneficiaries={filteredBeneficiaries}
+                    selectedBeneficiaryId={selectedBeneficiaryId}
+                    setSelectedBeneficiaryId={setSelectedBeneficiaryId}
+                    selectedCommodityCode={selectedCommodityCode}
+                    setSelectedCommodityCode={setSelectedCommodityCode}
+                    validityHours={validityHours}
+                    setValidityHours={setValidityHours}
+                    showAddResidentForm={showAddResidentForm}
+                    setShowAddResidentForm={setShowAddResidentForm}
+                    showAddMerchantForm={showAddMerchantForm}
+                    setShowAddMerchantForm={setShowAddMerchantForm}
+                    newResidentName={newResidentName}
+                    setNewResidentName={setNewResidentName}
+                    newResidentRtRw={newResidentRtRw}
+                    setNewResidentRtRw={setNewResidentRtRw}
+                    newResidentCategory={newResidentCategory}
+                    setNewResidentCategory={setNewResidentCategory}
+                    newResidentPhone={newResidentPhone}
+                    setNewResidentPhone={setNewResidentPhone}
+                    newMerchantName={newMerchantName}
+                    setNewMerchantName={setNewMerchantName}
+                    newMerchantOwner={newMerchantOwner}
+                    setNewMerchantOwner={setNewMerchantOwner}
+                    newMerchantRtRw={newMerchantRtRw}
+                    setNewMerchantRtRw={setNewMerchantRtRw}
+                    newMerchantBank={newMerchantBank}
+                    setNewMerchantBank={setNewMerchantBank}
+                    coordinatorRightView={coordinatorRightView}
+                    setCoordinatorRightView={setCoordinatorRightView}
+                    voucherStatusFilter={voucherStatusFilter}
+                    setVoucherStatusFilter={setVoucherStatusFilter}
+                    voucherSearch={voucherSearch}
+                    setVoucherSearch={setVoucherSearch}
+                    beneficiarySearch={beneficiarySearch}
+                    setBeneficiarySearch={setBeneficiarySearch}
+                    onAddBeneficiary={handleAddBeneficiary}
+                    onAddMerchant={handleAddMerchant}
+                    onTopupPool={handleTopupPool}
+                    onAddCommodity={handleAddCommodity}
+                    onIssueVoucher={handleIssueVoucher}
+                    onOpenVoucherCard={(v) => {
+                      setWalletBeneficiaryId(v.beneficiary_id);
+                      setSelectedVoucherForQR(v);
+                      setActiveTab("BENEFICIARY");
+                    }}
+                    onNotifySelectedBeneficiary={(name) =>
+                      showToast(
+                        "info",
+                        lang === "en"
+                          ? `${name} selected. Choose a package on the left and click Issue Signed Voucher.`
+                          : `${name} dipilih di form kiri. Pilih paket lalu klik Buat Kupon Sembako.`
+                      )
+                    }
+                  />
                 )}
 
-                {/* ============================================================
-                    TAB 2: KUPON WARGA
-                   ============================================================ */}
+                {/* TAB 2: KUPON WARGA / SLIP CETAK */}
                 {activeTab === "BENEFICIARY" && (
-                  <div className="space-y-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 gap-3 border-b border-line/55">
-                      <div>
-                        <p className="text-xs font-semibold text-emeraldTech">
-                          {currentUser.name} · Kupon Sembako
-                        </p>
-                        <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary mt-0.5">
-                          Kupon Warga
-                        </h1>
-                        <p className="text-sm text-ink-secondary mt-0.5">
-                          Tunjukkan QR di layar HP atau bawa kode kupon yang
-                          dicetak ke kedai terdekat.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={fetchClearinghouseState}
-                        className="no-print self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-card hover:bg-nested text-ink-primary border border-line/70 shadow-sm text-xs font-semibold transition"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 text-emeraldTech" />
-                        Muat Ulang
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                      <div className="no-print lg:col-span-5 flex flex-col space-y-5">
-                        <section className="bg-card border border-line/75 rounded-2xl shadow-sm p-5">
-                          <div className="flex items-center justify-between mb-2">
-                            <label
-                              htmlFor="family-select"
-                              className="text-xs font-bold text-ink-primary"
-                            >
-                              Nama Penerima
-                            </label>
-                            {currentWalletBeneficiary && (
-                              <span className="font-mono text-xs font-semibold text-emeraldTech">
-                                {currentWalletBeneficiary.id}
-                              </span>
-                            )}
-                          </div>
-                          <div className="relative">
-                            <select
-                              id="family-select"
-                              value={walletBeneficiaryId}
-                              onChange={(e) =>
-                                setWalletBeneficiaryId(e.target.value)
-                              }
-                              className="w-full h-12 px-3.5 pr-9 bg-surface text-ink-primary border border-line rounded-xl appearance-none text-sm font-semibold focus:outline-none focus:border-cta-bg cursor-pointer"
-                            >
-                              {beneficiaries.map((b) => (
-                                <option key={b.id} value={b.id}>
-                                  {b.name} — {b.rt_rw}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown className="w-4 h-4 text-ink-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          </div>
-
-                          {currentWalletBeneficiary && (
-                            <div className="mt-4 pt-4 border-t border-line/45 grid grid-cols-3 gap-3 text-xs">
-                              <div>
-                                <div className="text-ink-muted">Kategori</div>
-                                <div className="text-ink-primary font-semibold mt-0.5 leading-snug">
-                                  {currentWalletBeneficiary.category}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-ink-muted">Keluarga</div>
-                                <div className="text-ink-primary font-mono font-bold mt-0.5">
-                                  {currentWalletBeneficiary.household_size}{" "}
-                                  Orang
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-ink-muted">Siap Pakai</div>
-                                <div className="text-emeraldTech font-mono font-bold mt-0.5">
-                                  {currentWalletActiveCount} Kupon
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </section>
-
-                        <section className="bg-card border border-line/75 rounded-2xl shadow-sm p-5 space-y-3.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-ink-primary">
-                              Kupon Milik Warga
-                            </span>
-                            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-nested text-ink-primary font-semibold">
-                              {currentWalletVouchers.length} Kupon
-                            </span>
-                          </div>
-
-                          {currentWalletVouchers.length === 0 ? (
-                            <p className="py-6 text-center text-sm text-ink-muted">
-                              Belum ada kupon untuk warga ini.
-                            </p>
-                          ) : (
-                            <div className="space-y-3">
-                              {currentWalletVouchers.map((v) => {
-                                const isSelected =
-                                  selectedVoucherForQR?.id === v.id;
-                                return (
-                                  <button
-                                    key={v.id}
-                                    type="button"
-                                    onClick={() => setSelectedVoucherForQR(v)}
-                                    className={`relative w-full text-left p-4 rounded-xl transition-all ${isSelected
-                                        ? "bg-emeraldTech/8 border-2 border-cta-bg shadow-sm"
-                                        : "bg-surface border border-line/60 hover:border-line"
-                                      }`}
-                                  >
-                                    {isSelected && (
-                                      <span className="absolute -top-2.5 right-3 px-2.5 py-0.5 rounded-full bg-cta-bg text-cta-ink font-mono text-[10px] uppercase font-bold tracking-wider">
-                                        Dipilih
-                                      </span>
-                                    )}
-
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-mono text-base font-bold tracking-wider text-ink-primary">
-                                        {v.short_code}
-                                      </span>
-                                      <span
-                                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${v.status === "ACTIVE"
-                                            ? "bg-emeraldTech/12 text-emeraldTech"
-                                            : "bg-nested text-ink-muted"
-                                          }`}
-                                      >
-                                        <span
-                                          className={`w-1.5 h-1.5 rounded-full ${v.status === "ACTIVE"
-                                              ? "bg-emeraldTech"
-                                              : "bg-ink-muted"
-                                            }`}
-                                        />
-                                        {formatStatusLabel(v.status)}
-                                      </span>
-                                    </div>
-
-                                    <p className="text-sm font-bold text-ink-primary mt-2">
-                                      {v.commodity_name}
-                                    </p>
-                                    <p className="text-xs text-ink-secondary mt-0.5">
-                                      {v.commodity_items}
-                                    </p>
-
-                                    <div className="mt-3 pt-2.5 border-t border-line/40 flex items-center justify-between gap-2">
-                                      <span className="font-mono text-base font-bold text-emeraldTech tabular-nums">
-                                        {formatRupiah(v.nominal_idr)}
-                                      </span>
-                                      <span className="text-xs text-ink-muted tabular-nums">
-                                        s/d {formatDateTime(v.expires_at)}
-                                      </span>
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          <div className="flex items-start gap-2 pt-1 text-xs text-ink-secondary leading-relaxed">
-                            <Info className="w-4 h-4 text-emeraldTech shrink-0 mt-0.5" />
-                            <span>
-                              Kupon khusus ditukar sembako di kedai mitra dan
-                              tidak dapat diuangkan.
-                            </span>
-                          </div>
-                        </section>
-                      </div>
-
-                      {/* Kartu Kupon */}
-                      <div className="lg:col-span-7 flex flex-col items-center justify-center">
-                        {selectedVoucherForQR ? (
-                          <div className="w-full max-w-md bg-card border-2 border-line/80 rounded-2xl p-6 flex flex-col relative shadow-md">
-                            <div className="hidden sm:block absolute -left-3 top-28 w-6 h-6 rounded-full bg-canvas border-r-2 border-line/80" />
-                            <div className="hidden sm:block absolute -right-3 top-28 w-6 h-6 rounded-full bg-canvas border-l-2 border-line/80" />
-
-                            <div className="flex items-center justify-between pb-4 border-b border-dashed border-line">
-                              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emeraldTech">
-                                <HeartHandshake className="w-4 h-4" />
-                                <span>Kupon Sembako Warga</span>
-                              </div>
-                              <div
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${selectedVoucherForQR.status === "ACTIVE"
-                                    ? "bg-emeraldTech/15 text-emeraldTech"
-                                    : "bg-nested text-ink-muted"
-                                  }`}
-                              >
-                                <span
-                                  className={`w-2 h-2 rounded-full ${selectedVoucherForQR.status === "ACTIVE"
-                                      ? "bg-emeraldTech"
-                                      : "bg-ink-muted"
-                                    }`}
-                                />
-                                {formatStatusLabel(selectedVoucherForQR.status)}
-                              </div>
-                            </div>
-
-                            <div className="pt-4 pb-2">
-                              <h2 className="text-xl font-bold text-ink-primary">
-                                {selectedVoucherForQR.beneficiary_name}
-                              </h2>
-                              <p className="text-sm text-ink-secondary flex items-center gap-1.5 mt-1">
-                                <MapPin className="w-4 h-4 text-emeraldTech shrink-0" />
-                                <span>{selectedVoucherForQR.rt_rw}</span>
-                              </p>
-                            </div>
-
-                            <div className="mt-3 p-4 bg-nested/65 border border-line/60 rounded-xl flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-ink-primary">
-                                  {selectedVoucherForQR.commodity_name}
-                                </p>
-                                <p className="text-xs text-ink-secondary mt-0.5">
-                                  {selectedVoucherForQR.commodity_items}
-                                </p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-[11px] font-semibold text-ink-muted">
-                                  Nilai
-                                </p>
-                                <p className="font-mono text-lg font-bold text-emeraldTech tabular-nums">
-                                  {formatRupiah(
-                                    selectedVoucherForQR.nominal_idr
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="mt-5 flex flex-col items-center">
-                              <div className="bg-white p-4 rounded-2xl border-2 border-line/60 flex items-center justify-center w-56 h-56 shadow-sm">
-                                {qrDataUrl ? (
-                                  <img
-                                    src={qrDataUrl}
-                                    alt="Kode QR Kupon"
-                                    className="w-full h-full block"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-zinc-500">
-                                    Membuat QR...
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-ink-secondary mt-3 text-center">
-                                Tunjukkan QR ini ke pemilik kedai atau sebutkan
-                                kodenya:
-                              </p>
-
-                              <div className="w-full mt-3 px-4 py-3.5 bg-surface border-2 border-line rounded-xl flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold uppercase tracking-wider text-ink-secondary">
-                                  Kode Kupon
-                                </span>
-                                <span className="font-mono text-2xl font-bold tracking-[0.14em] text-ink-primary select-all">
-                                  {selectedVoucherForQR.short_code}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Detail Teknis Juri */}
-                            <div className="no-print mt-4 border border-line/60 rounded-xl bg-surface overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setShowVoucherTechDetails(
-                                    !showVoucherTechDetails
-                                  )
-                                }
-                                className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-medium text-ink-secondary hover:text-ink-primary transition"
-                              >
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Lock className="w-3.5 h-3.5 text-emeraldTech" />
-                                  <span>Detail Teknis (HMAC &amp; Nonce)</span>
-                                </span>
-                                {showVoucherTechDetails ? (
-                                  <ChevronUp className="w-4 h-4 shrink-0" />
-                                ) : (
-                                  <ChevronDown className="w-4 h-4 shrink-0" />
-                                )}
-                              </button>
-                              {showVoucherTechDetails && (
-                                <div className="px-3.5 pb-3 pt-1.5 border-t border-line/45 font-mono text-[11px] space-y-1.5">
-                                  <div className="flex justify-between gap-3">
-                                    <span className="text-ink-muted">ID</span>
-                                    <span className="text-ink-primary">
-                                      {selectedVoucherForQR.id}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between gap-3">
-                                    <span className="text-ink-muted">
-                                      NONCE
-                                    </span>
-                                    <span className="text-ink-primary">
-                                      {selectedVoucherForQR.nonce}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between gap-3">
-                                    <span className="text-ink-muted shrink-0">
-                                      HMAC-SHA256
-                                    </span>
-                                    <span
-                                      className="text-ink-secondary truncate"
-                                      title={selectedVoucherForQR.hmac_signature}
-                                    >
-                                      {selectedVoucherForQR.hmac_signature}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="no-print space-y-2.5 mt-5">
-                              <div className="grid grid-cols-2 gap-2.5">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleCopySmsSlip(selectedVoucherForQR)
-                                  }
-                                  className="h-11 px-3 rounded-xl bg-nested hover:bg-elevated border border-line/60 text-ink-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                                >
-                                  {copiedSms ? (
-                                    <>
-                                      <Check className="w-4 h-4 text-emeraldTech" />
-                                      <span className="text-emeraldTech">
-                                        Tersalin
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-4 h-4 text-ink-muted" />
-                                      <span>Salin SMS / WA</span>
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => window.print()}
-                                  className="h-11 px-3 rounded-xl bg-nested hover:bg-elevated border border-line/60 text-ink-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                                >
-                                  <Printer className="w-4 h-4 text-ink-muted" />
-                                  <span>Cetak Kertas</span>
-                                </button>
-                              </div>
-
-                              {selectedVoucherForQR.status === "ACTIVE" ? (
-                                canSwitchToTab("MERCHANT_POS") ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      sendVoucherToMerchantScanner(
-                                        selectedVoucherForQR
-                                      )
-                                    }
-                                    className="w-full h-12 px-4 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-sm font-semibold flex items-center justify-center gap-2 transition shadow-sm"
-                                  >
-                                    <span>Tukar di Kasir Kedai</span>
-                                    <ArrowUpRight className="w-4 h-4" />
-                                  </button>
-                                ) : (
-                                  <div className="p-3.5 rounded-xl bg-emeraldTech/10 border border-emeraldTech/30 text-center text-xs text-emeraldTech font-semibold">
-                                    Kupon aktif. Bawa HP atau hasil cetak ini ke
-                                    kedai mitra terdekat.
-                                  </div>
-                                )
-                              ) : (
-                                <div className="p-3.5 rounded-xl bg-nested border border-line/60 text-center text-xs text-ink-secondary">
-                                  Sudah ditukar di{" "}
-                                  <strong className="text-ink-primary">
-                                    {
-                                      selectedVoucherForQR.redeemed_by_merchant_name
-                                    }
-                                  </strong>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="w-full max-w-md bg-card rounded-2xl border border-line/70 p-12 text-center text-ink-muted text-sm">
-                            Warga ini belum memiliki kupon sembako.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <BeneficiaryTab
+                    lang={lang}
+                    currentUser={currentUser}
+                    beneficiaries={beneficiaries}
+                    walletBeneficiaryId={walletBeneficiaryId}
+                    setWalletBeneficiaryId={setWalletBeneficiaryId}
+                    currentWalletBeneficiary={currentWalletBeneficiary || null}
+                    currentWalletVouchers={currentWalletVouchers}
+                    currentWalletActiveCount={currentWalletActiveCount}
+                    selectedVoucherForQR={selectedVoucherForQR}
+                    setSelectedVoucherForQR={setSelectedVoucherForQR}
+                    qrDataUrl={qrDataUrl}
+                    showVoucherTechDetails={showVoucherTechDetails}
+                    setShowVoucherTechDetails={setShowVoucherTechDetails}
+                    copiedSms={copiedSms}
+                    canOpenMerchantPos={canSwitchToTab("MERCHANT_POS")}
+                    onRefresh={fetchClearinghouseState}
+                    onCopySmsSlip={handleCopySmsSlip}
+                    onSendToMerchantPos={sendVoucherToMerchantScanner}
+                  />
                 )}
 
-                {/* ============================================================
-                    TAB 3: KASIR KEDAI
-                   ============================================================ */}
+                {/* TAB 3: KASIR KEDAI & SCAN QR */}
                 {activeTab === "MERCHANT_POS" && (
-                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-                    <div className="xl:col-span-6 flex flex-col gap-4">
-                      <div className="bg-card rounded-2xl border border-line/75 shadow-sm p-5 flex flex-col gap-5">
-                        <div className="flex items-start justify-between gap-3 pb-4 border-b border-line/50">
-                          <div>
-                            <h2 className="text-base font-bold text-ink-primary flex items-center gap-2">
-                              <ScanLine className="w-5 h-5 text-emeraldTech" />
-                              Terima Kupon Warga
-                            </h2>
-                            <p className="text-xs text-ink-secondary mt-1">
-                              Scan QR warga atau ketik kode kuponnya. Bisa
-                              dipakai saat offline.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={toggleCamera}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-nested hover:bg-elevated text-ink-primary border border-line/60 text-xs font-semibold shrink-0 transition"
-                          >
-                            {cameraActive ? (
-                              <>
-                                <CameraOff className="w-4 h-4 text-ink-muted" />
-                                <span>Tutup Kamera</span>
-                              </>
-                            ) : (
-                              <>
-                                <Camera className="w-4 h-4 text-emeraldTech" />
-                                <span>Scan Kamera</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-
-                        {cameraActive && (
-                          <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-line">
-                            <video
-                              ref={videoRef}
-                              autoPlay
-                              playsInline
-                              muted
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <div className="w-44 h-44 border border-dashed border-emeraldTech/80 relative flex items-center justify-center rounded-lg">
-                                <span className="px-2.5 py-1 rounded bg-black/75 font-mono text-[10px] text-white uppercase tracking-wider">
-                                  Arahkan ke QR
-                                </span>
-                              </div>
-                            </div>
-                            <div className="absolute bottom-2.5 left-3 px-2.5 py-1 rounded-lg bg-black/75 text-[11px] text-white">
-                              {cameraDetectSupported
-                                ? "Pembaca QR aktif"
-                                : "Kamera aktif"}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <label className="block text-xs font-bold text-ink-primary">
-                            1. Pilih Kedai
-                          </label>
-                          <div className="relative">
-                            <select
-                              value={activeMerchantId}
-                              onChange={(e) =>
-                                setActiveMerchantId(e.target.value)
-                              }
-                              className="w-full h-12 px-3.5 pr-9 bg-surface text-ink-primary border border-line rounded-xl appearance-none text-sm font-semibold focus:outline-none focus:border-cta-bg cursor-pointer"
-                            >
-                              {merchants.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.name} ({m.owner}) · Belum Cair{" "}
-                                  {formatRupiah(m.unsettled_balance_idr)}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown className="w-4 h-4 text-ink-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-ink-primary">
-                              2. Pilih Cepat Kupon
-                            </span>
-                            <span className="font-mono text-xs text-ink-muted tabular-nums">
-                              {vouchers.length} kupon
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {vouchers.map((v) => {
-                              const selected =
-                                scannerInputCode === v.short_code;
-                              const isActive = v.status === "ACTIVE";
-                              return (
-                                <button
-                                  key={v.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setScannerInputCode(v.short_code);
-                                    setScannedQRPayloadRaw(
-                                      encodeVoucherToQRPayload(v)
-                                    );
-                                    setCryptoTrace(null);
-                                  }}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-mono text-xs border transition ${selected
-                                      ? "bg-cta-bg text-cta-ink border-cta-bg font-bold shadow-sm"
-                                      : isActive
-                                        ? "bg-surface hover:bg-nested text-ink-primary border-line/70 font-semibold"
-                                        : "bg-nested/50 text-ink-muted border-line/40 opacity-85 hover:opacity-100"
-                                    }`}
-                                >
-                                  <span
-                                    className={`w-2 h-2 rounded-full ${selected
-                                        ? "bg-cta-ink"
-                                        : isActive
-                                          ? "bg-emeraldTech"
-                                          : "bg-ink-muted"
-                                      }`}
-                                  />
-                                  <span>{v.short_code}</span>
-                                  <span
-                                    className={`text-[11px] font-sans ${selected
-                                        ? "text-cta-ink/90"
-                                        : "text-ink-muted"
-                                      }`}
-                                  >
-                                    · {formatStatusLabel(v.status)}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-xs font-bold text-ink-primary">
-                              3. Kode Kupon
-                            </label>
-                            <span className="font-mono text-xs text-ink-muted">
-                              Contoh: CL-8841-K9
-                            </span>
-                          </div>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={scannerInputCode}
-                              onChange={(e) => {
-                                setScannerInputCode(
-                                  e.target.value.toUpperCase()
-                                );
-                                setScannedQRPayloadRaw("");
-                              }}
-                              placeholder="Ketik kode kupon..."
-                              className="w-full h-12 px-4 pr-28 rounded-xl bg-surface border-2 border-line focus:border-cta-bg font-mono text-lg font-bold tracking-wider uppercase text-ink-primary placeholder:text-ink-muted/70 placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:normal-case placeholder:tracking-normal outline-none"
-                            />
-                            {scannerInputCode.trim().length > 0 && (
-                              <span
-                                className={`absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold px-2.5 py-1 rounded-full ${isCodeFormatValid
-                                    ? "bg-emeraldTech/15 text-emeraldTech"
-                                    : "bg-nested text-ink-muted"
-                                  }`}
-                              >
-                                {isCodeFormatValid ? "Cocok" : "Cek Kode"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleVerifyAndRedeem(false)}
-                          className="w-full h-12 rounded-xl bg-cta-bg hover:opacity-90 active:scale-[0.99] text-cta-ink text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm"
-                        >
-                          <ShieldCheck className="w-5 h-5" />
-                          <span>
-                            {isOfflineMode
-                              ? "Cek & Simpan Offline"
-                              : "Cek & Terima Kupon"}
-                          </span>
-                        </button>
-
-                        <div className="pt-3 border-t border-line/45 space-y-2.5">
-                          <p className="text-xs font-bold text-ink-secondary">
-                            Simulasi Pengujian
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyAndRedeem(true)}
-                              className="h-11 px-3 rounded-xl bg-roseTech/10 hover:bg-roseTech/18 border border-roseTech/35 text-roseTech text-xs font-bold flex items-center justify-center gap-1.5 transition"
-                            >
-                              <ShieldAlert className="w-4 h-4" />
-                              <span>Tes Kupon Palsu</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleSimulateOfflineConflict}
-                              className="h-11 px-3 rounded-xl bg-amberTech/10 hover:bg-amberTech/18 border border-amberTech/35 text-amberTech text-xs font-bold flex items-center justify-center gap-1.5 transition"
-                            >
-                              <AlertTriangle className="w-4 h-4" />
-                              <span>Tes Kupon Ganda</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 3 Kartu Ringkasan */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-4 flex flex-col gap-1">
-                          <span className="text-[11px] font-semibold text-ink-muted">
-                            Antrean Offline
-                          </span>
-                          <span className="font-mono text-xl font-bold text-ink-primary tabular-nums">
-                            {offlineQueue.length}
-                          </span>
-                          <span
-                            className={`text-xs font-semibold ${offlineQueue.length > 0
-                                ? "text-amberTech"
-                                : "text-emeraldTech"
-                              }`}
-                          >
-                            {offlineQueue.length > 0
-                              ? "Belum terkirim"
-                              : "Terkirim semua"}
-                          </span>
-                        </div>
-                        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-4 flex flex-col gap-1">
-                          <span className="text-[11px] font-semibold text-ink-muted">
-                            Kupon Ditolak
-                          </span>
-                          <span className="font-mono text-xl font-bold text-emeraldTech tabular-nums">
-                            {fraudBlockedCount}
-                          </span>
-                          <span className="text-xs text-ink-muted">
-                            Palsu / ganda
-                          </span>
-                        </div>
-                        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-4 flex flex-col gap-1">
-                          <span className="text-[11px] font-semibold text-ink-muted">
-                            Tercatat
-                          </span>
-                          <span className="font-mono text-xl font-bold text-ink-primary tabular-nums">
-                            {ledger.length}
-                          </span>
-                          <span className="text-xs text-ink-muted">
-                            Total transaksi
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* RIGHT COLUMN */}
-                    <div className="xl:col-span-6 flex flex-col gap-4">
-                      <div className="bg-card rounded-2xl border border-line/75 shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-line/50 bg-surface/60 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck className="w-5 h-5 text-emeraldTech" />
-                            <h3 className="text-base font-bold text-ink-primary">
-                              Hasil Pengecekan
-                            </h3>
-                          </div>
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${isOfflineMode
-                                ? "bg-amberTech/12 text-amberTech"
-                                : "bg-emeraldTech/12 text-emeraldTech"
-                              }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${isOfflineMode
-                                  ? "bg-amberTech"
-                                  : "bg-emeraldTech"
-                                }`}
-                            />
-                            {isOfflineMode ? "Offline" : "Online"}
-                          </span>
-                        </div>
-
-                        <div className="p-5">
-                          {cryptoTrace ? (
-                            <div className="space-y-4">
-                              {cryptoTrace.hmacValid &&
-                                cryptoTrace.doubleSpendCheckPassed ? (
-                                <div className="p-4 rounded-xl bg-emeraldTech/10 border-2 border-emeraldTech/40 space-y-2">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cta-bg text-cta-ink text-xs font-bold uppercase">
-                                      <CheckCircle2 className="w-4 h-4" />
-                                      {cryptoTrace.mode === "OFFLINE_INDEXEDDB"
-                                        ? "Kupon Sah · Simpan Offline"
-                                        : "Kupon Sah"}
-                                    </span>
-                                    <span className="font-mono text-xs text-ink-secondary tabular-nums">
-                                      {cryptoTrace.durationMs} ms
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-ink-primary leading-relaxed">
-                                    Kupon cocok. Barang:{" "}
-                                    <strong>{cryptoTrace.commodityName}</strong>{" "}
-                                    ({formatRupiah(cryptoTrace.nominalIdr)})
-                                    untuk{" "}
-                                    <strong>
-                                      {cryptoTrace.beneficiaryName}
-                                    </strong>
-                                    .
-                                  </p>
-                                  <p className="text-xs text-ink-secondary">
-                                    {cryptoTrace.mode === "OFFLINE_INDEXEDDB"
-                                      ? "Catatan disimpan di HP. Kirim ke pusat saat sinyal ada."
-                                      : "Saldo kedai bertambah otomatis."}
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="p-4 rounded-xl bg-roseTech/10 border-2 border-roseTech/45 space-y-2">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-roseTech text-white text-xs font-bold uppercase">
-                                      <ShieldAlert className="w-4 h-4" />
-                                      {!cryptoTrace.hmacValid
-                                        ? "Kupon Ditolak (Palsu)"
-                                        : "Kupon Ditolak (Sudah Dipakai)"}
-                                    </span>
-                                    <span className="font-mono text-xs text-ink-secondary tabular-nums">
-                                      {cryptoTrace.durationMs} ms
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-roseTech leading-relaxed font-semibold">
-                                    Kupon ditolak. {cryptoTrace.errorReason}
-                                  </p>
-                                </div>
-                              )}
-
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                                <div className="p-3 rounded-xl bg-surface border border-line/60">
-                                  <p className="text-ink-muted">Keaslian</p>
-                                  <p
-                                    className={`font-bold mt-0.5 ${cryptoTrace.hmacValid
-                                        ? "text-emeraldTech"
-                                        : "text-roseTech"
-                                      }`}
-                                  >
-                                    {cryptoTrace.hmacValid
-                                      ? "Asli"
-                                      : "Tidak Cocok"}
-                                  </p>
-                                </div>
-                                <div className="p-3 rounded-xl bg-surface border border-line/60">
-                                  <p className="text-ink-muted">Pemakaian</p>
-                                  <p
-                                    className={`font-bold mt-0.5 ${cryptoTrace.doubleSpendCheckPassed
-                                        ? "text-emeraldTech"
-                                        : "text-roseTech"
-                                      }`}
-                                  >
-                                    {cryptoTrace.doubleSpendCheckPassed
-                                      ? "Belum Dipakai"
-                                      : "Sudah Dipakai"}
-                                  </p>
-                                </div>
-                                <div className="p-3 rounded-xl bg-surface border border-line/60">
-                                  <p className="text-ink-muted">Masa Berlaku</p>
-                                  <p
-                                    className={`font-bold mt-0.5 ${cryptoTrace.expiryCheckPassed
-                                        ? "text-emeraldTech"
-                                        : "text-roseTech"
-                                      }`}
-                                  >
-                                    {cryptoTrace.expiryCheckPassed
-                                      ? "Berlaku"
-                                      : "Habis"}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="border border-line/60 rounded-xl bg-surface overflow-hidden">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setShowVerifierTechDetails(
-                                      !showVerifierTechDetails
-                                    )
-                                  }
-                                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-medium text-ink-secondary hover:text-ink-primary transition"
-                                >
-                                  <span className="font-mono text-[11px]">
-                                    Detail Teknis (Web Crypto HMAC-SHA256)
-                                  </span>
-                                  {showVerifierTechDetails ? (
-                                    <ChevronUp className="w-4 h-4 shrink-0" />
-                                  ) : (
-                                    <ChevronDown className="w-4 h-4 shrink-0" />
-                                  )}
-                                </button>
-
-                                {showVerifierTechDetails && (
-                                  <div className="px-3.5 pb-3.5 pt-2 border-t border-line/45 font-mono text-[11px] space-y-2 text-ink-secondary">
-                                    <div className="flex justify-between gap-4">
-                                      <span className="text-ink-muted shrink-0">
-                                        CLIENT_TX_ID
-                                      </span>
-                                      <span className="text-ink-primary truncate">
-                                        {cryptoTrace.clientTxId}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between gap-4">
-                                      <span className="text-ink-muted shrink-0">
-                                        PAYLOAD
-                                      </span>
-                                      <span className="truncate">
-                                        {cryptoTrace.canonicalMessage}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between gap-4">
-                                      <span className="text-ink-muted shrink-0">
-                                        SIG_KUPON
-                                      </span>
-                                      <span className="truncate">
-                                        {cryptoTrace.providedSignature}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between gap-4">
-                                      <span className="text-ink-muted shrink-0">
-                                        HMAC_HITUNG
-                                      </span>
-                                      <span
-                                        className={`truncate ${cryptoTrace.hmacValid
-                                            ? "text-emeraldTech"
-                                            : "text-roseTech"
-                                          }`}
-                                      >
-                                        {cryptoTrace.computedSignature}
-                                      </span>
-                                    </div>
-                                    {cryptoTrace.receiptHash && (
-                                      <div className="flex justify-between gap-4 pt-1.5 border-t border-line/40">
-                                        <span className="text-ink-muted shrink-0">
-                                          STRUK_SHA256
-                                        </span>
-                                        <span className="text-ink-primary truncate">
-                                          {cryptoTrace.receiptHash}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="py-8 px-4 text-center bg-surface rounded-xl border border-line/50 space-y-2">
-                              <ShieldCheck className="w-7 h-7 text-emeraldTech mx-auto" />
-                              <p className="text-sm font-bold text-ink-primary">
-                                Belum ada kupon yang dicek
-                              </p>
-                              <p className="text-xs text-ink-secondary max-w-sm mx-auto">
-                                Pilih atau ketik kode kupon di kiri, lalu klik{" "}
-                                <strong className="text-ink-primary">
-                                  Cek &amp; Terima Kupon
-                                </strong>
-                                .
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Antrean Offline */}
-                      <div className="bg-card rounded-2xl border border-line/75 shadow-sm p-5 space-y-3.5">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-base font-bold text-ink-primary">
-                              Catatan Offline di HP
-                            </h3>
-                            <span
-                              className={`font-mono text-xs px-2.5 py-0.5 rounded-full tabular-nums font-semibold ${offlineQueue.length > 0
-                                  ? "bg-amberTech/15 text-amberTech"
-                                  : "bg-nested text-ink-secondary"
-                                }`}
-                            >
-                              {offlineQueue.length} Antrean
-                            </span>
-                          </div>
-                          {offlineQueue.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={handleSyncOfflineBatch}
-                              disabled={isSyncingBatch}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-bold transition shadow-sm"
-                            >
-                              <RefreshCw
-                                className={`w-3.5 h-3.5 ${isSyncingBatch ? "animate-spin" : ""}`}
-                              />
-                              <span>Kirim Semua ke Pusat</span>
-                            </button>
-                          )}
-                        </div>
-
-                        {offlineQueue.length === 0 ? (
-                          <div className="bg-surface border border-line/50 rounded-xl p-5 text-center flex flex-col items-center gap-1.5">
-                            <CheckCircle2 className="w-6 h-6 text-emeraldTech" />
-                            <p className="text-sm font-semibold text-ink-primary">
-                              Antrean kosong.
-                            </p>
-                            <p className="text-xs text-ink-secondary">
-                              Ubah tombol{" "}
-                              <strong className="text-ink-primary">
-                                Sinyal
-                              </strong>{" "}
-                              di kiri menjadi{" "}
-                              <strong className="text-ink-primary">
-                                Offline
-                              </strong>{" "}
-                              untuk mencoba transaksi tanpa internet.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-2.5 max-h-56 overflow-y-auto">
-                            {offlineQueue.map((item) => (
-                              <div
-                                key={item.queue_id}
-                                className="p-3.5 rounded-xl bg-surface border border-line/60 border-l-4 border-l-amberTech flex items-center justify-between gap-3"
-                              >
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-mono text-sm font-bold text-ink-primary">
-                                      {item.short_code}
-                                    </span>
-                                    {item.is_simulated_conflict && (
-                                      <span className="px-2 py-0.5 rounded-full bg-roseTech/15 text-roseTech font-mono text-[10px] font-bold">
-                                        TES GANDA
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-ink-secondary mt-0.5 truncate">
-                                    {item.merchant_name} ·{" "}
-                                    {formatShortTime(item.redeemed_at)} WIB
-                                  </p>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="font-mono text-sm font-bold text-ink-primary tabular-nums">
-                                    {formatRupiah(item.nominal_idr)}
-                                  </p>
-                                  <span className="text-[11px] font-semibold text-amberTech">
-                                    Menunggu sinyal
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Aktivitas Terbaru */}
-                      <div className="bg-card rounded-2xl border border-line/75 shadow-sm overflow-hidden">
-                        <div className="px-5 py-3.5 border-b border-line/50 bg-surface/60 flex items-center justify-between">
-                          <h3 className="text-sm font-bold text-ink-primary">
-                            {lastSyncResults && lastSyncResults.length > 0
-                              ? "Hasil Kirim Offline"
-                              : "Transaksi Terbaru"}
-                          </h3>
-                          {lastSyncResults && lastSyncResults.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => setLastSyncResults(null)}
-                              className="text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                            >
-                              Tutup
-                            </button>
-                          ) : (
-                            <span className="text-xs font-semibold text-emeraldTech">
-                              Terbaru
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="divide-y divide-line/40">
-                          {lastSyncResults && lastSyncResults.length > 0 ? (
-                            lastSyncResults.map((r) => (
-                              <div
-                                key={r.client_tx_id}
-                                className="p-4 flex items-start justify-between gap-3"
-                              >
-                                <div className="min-w-0 space-y-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span
-                                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${r.status === "SYNCED"
-                                          ? "bg-emeraldTech/15 text-emeraldTech"
-                                          : "bg-roseTech/15 text-roseTech"
-                                        }`}
-                                    >
-                                      {formatOutcomeLabel(r.outcome)}
-                                    </span>
-                                    <span className="font-mono text-xs font-bold text-ink-primary">
-                                      {r.short_code}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-ink-secondary leading-relaxed">
-                                    {r.reason}
-                                  </p>
-                                </div>
-                              </div>
-                            ))
-                          ) : ledger.length === 0 ? (
-                            <p className="p-5 text-center text-xs text-ink-muted">
-                              Belum ada transaksi.
-                            </p>
-                          ) : (
-                            ledger.slice(0, 3).map((entry) => (
-                              <div
-                                key={entry.id}
-                                className="p-4 flex items-center justify-between gap-3 hover:bg-nested/40 transition-colors"
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <span
-                                    className={`px-2.5 py-1 rounded-full text-[10.5px] font-bold shrink-0 ${entry.sync_mode === "OFFLINE_BATCH_SYNC"
-                                        ? "bg-amberTech/15 text-amberTech"
-                                        : "bg-emeraldTech/15 text-emeraldTech"
-                                      }`}
-                                  >
-                                    {entry.sync_mode === "OFFLINE_BATCH_SYNC"
-                                      ? "Offline"
-                                      : "Online"}
-                                  </span>
-                                  <div className="min-w-0">
-                                    <p className="font-mono text-xs font-bold text-ink-primary truncate">
-                                      {entry.short_code} ·{" "}
-                                      {formatRupiah(entry.nominal_idr)}
-                                    </p>
-                                    <p className="text-xs text-ink-secondary truncate">
-                                      {entry.merchant_name}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0 font-mono text-xs text-ink-muted tabular-nums">
-                                  {formatShortTime(entry.timestamp)}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <MerchantPosTab
+                    lang={lang}
+                    currentUser={currentUser}
+                    realtimeConnected={realtimeConnected}
+                    isOfflineMode={isOfflineMode}
+                    cameraActive={cameraActive}
+                    cameraDetectSupported={cameraDetectSupported}
+                    videoRef={videoRef}
+                    merchants={merchants}
+                    activeMerchantId={activeMerchantId}
+                    setActiveMerchantId={setActiveMerchantId}
+                    vouchers={vouchers}
+                    scannerInputCode={scannerInputCode}
+                    setScannerInputCode={setScannerInputCode}
+                    setScannedQRPayloadRaw={setScannedQRPayloadRaw}
+                    isCodeFormatValid={isCodeFormatValid}
+                    cryptoTrace={cryptoTrace}
+                    setCryptoTrace={setCryptoTrace}
+                    showVerifierTechDetails={showVerifierTechDetails}
+                    setShowVerifierTechDetails={setShowVerifierTechDetails}
+                    offlineQueue={offlineQueue}
+                    isSyncingBatch={isSyncingBatch}
+                    fraudBlockedCount={fraudBlockedCount}
+                    ledger={ledger}
+                    lastSyncResults={lastSyncResults}
+                    setLastSyncResults={setLastSyncResults}
+                    onToggleCamera={toggleCamera}
+                    onUploadQrFile={handleUploadQrFile}
+                    onVerifyAndRedeem={handleVerifyAndRedeem}
+                    onSimulateOfflineConflict={handleSimulateOfflineConflict}
+                    onSyncOfflineBatch={handleSyncOfflineBatch}
+                  />
                 )}
 
-                {/* ============================================================
-                    TAB 4: PENCAIRAN & RIWAYAT
-                   ============================================================ */}
+                {/* TAB 4: PENCAIRAN & RIWAYAT */}
                 {activeTab === "CLEARINGHOUSE" && (
-                  <div className="space-y-7">
-                    <section className="space-y-4">
-                      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-emeraldTech">
-                            Pencairan Kedai · Simulasi Transfer
-                          </p>
-                          <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary mt-0.5">
-                            Pencairan Saldo Kedai
-                          </h1>
-                          <p className="text-sm text-ink-secondary mt-0.5">
-                            Cairkan total penukaran kupon ke rekening atau QRIS
-                            masing-masing kedai.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <div className="flex items-center gap-2 px-3.5 py-2 bg-card border border-line/70 rounded-xl shadow-sm text-xs">
-                            <span className="w-2 h-2 rounded-full bg-emeraldTech animate-pulse" />
-                            <span className="text-ink-secondary">
-                              Sisa Dana:{" "}
-                              <strong className="font-mono text-ink-primary tabular-nums">
-                                {formatRupiah(poolTotalIdr)}
-                              </strong>
-                            </span>
-                          </div>
-                          {currentUser.role === "COORDINATOR" && (
-                            <button
-                              type="button"
-                              onClick={() => handleSettleMerchants()}
-                              disabled={totalUnsettledIdr === 0}
-                              className={`h-11 px-4 rounded-xl text-sm font-bold flex items-center gap-2 transition tabular-nums shadow-sm ${totalUnsettledIdr > 0
-                                  ? "bg-cta-bg hover:opacity-90 text-cta-ink"
-                                  : "bg-nested text-ink-muted border border-line/60 cursor-not-allowed shadow-none"
-                                }`}
-                            >
-                              <Send className="w-4 h-4" />
-                              <span>
-                                Cairkan Semua ({formatRupiah(totalUnsettledIdr)}
-                                )
-                              </span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {merchants.length === 0 ? (
-                        <div className="bg-card border border-line/70 rounded-2xl p-8 text-center text-sm text-ink-muted">
-                          Belum ada kedai terdaftar.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                          {merchants.map((m) => {
-                            const hasPending = m.unsettled_balance_idr > 0;
-                            return (
-                              <div
-                                key={m.id}
-                                className="bg-card border border-line/75 rounded-2xl shadow-sm p-5 flex flex-col justify-between gap-4"
-                              >
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-nested text-ink-secondary font-semibold">
-                                      {m.id}
-                                    </span>
-                                    <span
-                                      className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full ${hasPending
-                                          ? "bg-emeraldTech/12 text-emeraldTech"
-                                          : "bg-nested text-ink-muted"
-                                        }`}
-                                    >
-                                      <span
-                                        className={`w-1.5 h-1.5 rounded-full ${hasPending
-                                            ? "bg-emeraldTech"
-                                            : "bg-ink-muted"
-                                          }`}
-                                      />
-                                      {hasPending ? "Siap Cair" : "Lunas"}
-                                    </span>
-                                  </div>
-
-                                  <div>
-                                    <h3 className="text-base font-bold text-ink-primary leading-snug">
-                                      {m.name}
-                                    </h3>
-                                    <p className="text-xs text-ink-secondary mt-0.5">
-                                      {m.owner} · {m.rt_rw}
-                                    </p>
-                                    <p className="font-mono text-xs text-ink-primary mt-2 flex items-center gap-1.5 bg-surface px-2.5 py-1.5 rounded-lg border border-line/50">
-                                      <Landmark className="w-3.5 h-3.5 text-emeraldTech shrink-0" />
-                                      <span className="truncate">
-                                        {m.bank_account}
-                                      </span>
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="pt-3.5 border-t border-line/45 space-y-2">
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="text-ink-muted">
-                                      Kupon Diterima
-                                    </span>
-                                    <span className="font-mono text-ink-primary font-bold tabular-nums">
-                                      {m.redemption_count}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="text-ink-muted">
-                                      Sudah Cair
-                                    </span>
-                                    <span className="font-mono text-ink-secondary tabular-nums">
-                                      {formatRupiah(m.total_settled_idr)}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-baseline justify-between pt-1.5">
-                                    <span className="text-xs font-bold text-ink-secondary">
-                                      Belum Cair
-                                    </span>
-                                    <span
-                                      className={`font-mono text-lg font-bold tabular-nums ${hasPending
-                                          ? "text-emeraldTech"
-                                          : "text-ink-muted"
-                                        }`}
-                                    >
-                                      {formatRupiah(m.unsettled_balance_idr)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {hasPending &&
-                                  currentUser.role === "COORDINATOR" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSettleMerchants(m.id)}
-                                    className="w-full h-10 px-4 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-bold flex items-center justify-center gap-2 transition shadow-sm"
-                                  >
-                                    <Send className="w-3.5 h-3.5" />
-                                    <span>Cairkan Saldo</span>
-                                  </button>
-                                ) : (
-                                  <div className="w-full h-10 px-3 rounded-xl bg-surface border border-line/50 text-ink-muted text-xs font-medium flex items-center justify-center text-center">
-                                    {hasPending
-                                      ? "Menunggu pencairan pengurus"
-                                      : "Sudah lunas"}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
-
-                    {/* Riwayat Penukaran */}
-                    <section className="space-y-3.5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                          <h2 className="text-lg font-bold text-ink-primary">
-                            Riwayat Penukaran Kupon
-                          </h2>
-                          <p className="text-sm text-ink-secondary mt-0.5">
-                            Setiap transaksi saling terhubung secara otomatis
-                            supaya data tidak bisa diubah.
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2 self-start sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => setShowFullHashes(!showFullHashes)}
-                            className="h-10 px-3.5 rounded-xl bg-card hover:bg-nested text-ink-primary border border-line/70 text-xs font-semibold transition"
-                          >
-                            {showFullHashes
-                              ? "Tutup Hash"
-                              : "Kode Hash (Juri)"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleVerifyHashChain}
-                            disabled={isVerifyingChain}
-                            className="h-10 px-4 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                          >
-                            <ShieldCheck
-                              className={`w-4 h-4 ${isVerifyingChain ? "animate-pulse" : ""}`}
-                            />
-                            <span>
-                              {isVerifyingChain
-                                ? "Mengecek..."
-                                : "Cek Keaslian Data"}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div
-                        className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl border-2 ${chainCheckResult
-                            ? chainCheckResult.valid
-                              ? "bg-emeraldTech/10 border-emeraldTech/40"
-                              : "bg-roseTech/10 border-roseTech/45"
-                            : "bg-card border-line/70"
-                          }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${chainCheckResult
-                                ? chainCheckResult.valid
-                                  ? "bg-cta-bg text-cta-ink"
-                                  : "bg-roseTech text-white"
-                                : "bg-nested text-emeraldTech"
-                              }`}
-                          >
-                            {chainCheckResult && !chainCheckResult.valid ? (
-                              <AlertTriangle className="w-4 h-4" />
-                            ) : (
-                              <Check className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div className="text-sm min-w-0">
-                            {chainCheckResult ? (
-                              <span className="text-ink-primary font-semibold">
-                                {chainCheckResult.message}
-                              </span>
-                            ) : (
-                              <span className="text-ink-secondary">
-                                Ada{" "}
-                                <strong className="text-ink-primary">
-                                  {ledger.length} transaksi
-                                </strong>{" "}
-                                tercatat. Klik{" "}
-                                <strong className="text-ink-primary">
-                                  Cek Keaslian Data
-                                </strong>{" "}
-                                untuk memastikan catatan belum berubah.
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {chainCheckResult && (
-                          <span className="hidden lg:inline-block font-mono text-xs text-ink-muted shrink-0">
-                            HEAD: {chainCheckResult.head_hash.slice(0, 14)}...
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="overflow-x-auto bg-card border border-line/75 rounded-2xl shadow-sm">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-nested/60 border-b border-line/50 text-xs font-semibold text-ink-secondary">
-                              <th className="py-3 px-4">No &amp; Waktu</th>
-                              <th className="py-3 px-3">Kupon &amp; Paket</th>
-                              <th className="py-3 px-3">Kedai</th>
-                              <th className="py-3 px-3 text-right">Nilai</th>
-                              <th className="py-3 px-3 text-center">Cara</th>
-                              {showFullHashes && (
-                                <th className="py-3 px-4">
-                                  Hash SHA-256 (Prev / Curr)
-                                </th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-line/40 text-sm">
-                            {ledger.length === 0 ? (
-                              <tr>
-                                <td
-                                  colSpan={showFullHashes ? 6 : 5}
-                                  className="py-10 text-center text-ink-muted text-sm"
-                                >
-                                  Belum ada transaksi.
-                                </td>
-                              </tr>
-                            ) : (
-                              ledger.map((entry) => (
-                                <tr
-                                  key={entry.id}
-                                  className="hover:bg-nested/35 transition-colors"
-                                >
-                                  <td className="py-3.5 px-4 whitespace-nowrap">
-                                    <div className="font-mono font-bold text-ink-primary">
-                                      {entry.id}
-                                    </div>
-                                    <div className="text-xs text-ink-muted tabular-nums mt-0.5">
-                                      {formatDateTime(entry.timestamp)}
-                                    </div>
-                                  </td>
-                                  <td className="py-3.5 px-3">
-                                    <span className="font-mono text-xs font-bold text-ink-primary bg-nested px-2 py-0.5 rounded-md">
-                                      {entry.short_code}
-                                    </span>
-                                    <div className="text-xs text-ink-secondary mt-1">
-                                      {entry.commodity_name}
-                                    </div>
-                                  </td>
-                                  <td className="py-3.5 px-3">
-                                    <div className="text-ink-primary font-semibold">
-                                      {entry.merchant_name}
-                                    </div>
-                                    <div className="text-xs text-ink-muted mt-0.5">
-                                      {entry.settlement_batch_id
-                                        ? `Cair (${entry.settlement_batch_id})`
-                                        : "Belum cair"}
-                                    </div>
-                                  </td>
-                                  <td className="py-3.5 px-3 text-right font-mono font-bold text-ink-primary tabular-nums whitespace-nowrap">
-                                    {formatRupiah(entry.nominal_idr)}
-                                  </td>
-                                  <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                                    <span
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${entry.sync_mode === "OFFLINE_BATCH_SYNC"
-                                          ? "bg-amberTech/12 text-amberTech"
-                                          : "bg-emeraldTech/12 text-emeraldTech"
-                                        }`}
-                                    >
-                                      <span
-                                        className={`w-1.5 h-1.5 rounded-full ${entry.sync_mode ===
-                                            "OFFLINE_BATCH_SYNC"
-                                            ? "bg-amberTech"
-                                            : "bg-emeraldTech"
-                                          }`}
-                                      />
-                                      {entry.sync_mode === "OFFLINE_BATCH_SYNC"
-                                        ? "Offline"
-                                        : "Online"}
-                                    </span>
-                                  </td>
-                                  {showFullHashes && (
-                                    <td className="py-3.5 px-4 font-mono text-[11px] max-w-xs">
-                                      <div
-                                        className="text-ink-muted truncate"
-                                        title={entry.prev_hash}
-                                      >
-                                        P: {entry.prev_hash.slice(0, 18)}...
-                                      </div>
-                                      <div
-                                        className="text-emeraldTech truncate"
-                                        title={entry.tx_hash}
-                                      >
-                                        C: {entry.tx_hash.slice(0, 18)}...
-                                      </div>
-                                    </td>
-                                  )}
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </section>
-
-                    {/* 2 Kolom Bawah */}
-                    <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                      <div className="bg-card rounded-2xl border border-line/75 shadow-sm p-5 flex flex-col justify-between gap-4">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h3 className="text-base font-bold text-ink-primary">
-                                Riwayat Sinkron Offline
-                              </h3>
-                              <p className="text-xs text-ink-secondary mt-0.5">
-                                Daftar data yang dikirim dari mode offline dan
-                                kupon ganda yang ditolak
-                              </p>
-                            </div>
-                          </div>
-
-                          {reconciliationLogs.length === 0 ? (
-                            <p className="py-8 text-center text-sm text-ink-muted">
-                              Belum ada catatan sinkronisasi.
-                            </p>
-                          ) : (
-                            <div className="space-y-4 pl-3 border-l-2 border-line/60 max-h-72 overflow-y-auto pr-1">
-                              {reconciliationLogs.map((log) => (
-                                <div key={log.id} className="relative pl-4">
-                                  <span
-                                    className={`absolute -left-[19px] top-1.5 w-3 h-3 rounded-full ring-4 ring-card ${log.outcome === "SYNCED"
-                                        ? "bg-emeraldTech"
-                                        : "bg-roseTech"
-                                      }`}
-                                  />
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <span
-                                      className={`text-xs font-bold ${log.outcome === "SYNCED"
-                                          ? "text-emeraldTech"
-                                          : "text-roseTech"
-                                        }`}
-                                    >
-                                      {formatOutcomeLabel(log.outcome)} ·{" "}
-                                      {log.short_code}
-                                    </span>
-                                    <span className="font-mono text-[11px] text-ink-muted tabular-nums">
-                                      {formatDateTime(log.processed_at)}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-ink-secondary mt-1 leading-relaxed">
-                                    {log.reason}
-                                  </p>
-                                  <p className="text-[11px] text-ink-muted mt-1">
-                                    {log.merchant_name}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-3 border-t border-line/45 flex items-center justify-between gap-2 text-xs">
-                          <span className="text-ink-muted">
-                            {reconciliationLogs.length} catatan
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleExportJson}
-                            className="inline-flex items-center gap-1.5 font-bold text-emeraldTech hover:underline"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Unduh JSON</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bg-card rounded-2xl border border-line/75 shadow-sm p-5 flex flex-col justify-between gap-4">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h3 className="text-base font-bold text-ink-primary flex items-center gap-2">
-                                <Receipt className="w-4 h-4 text-emeraldTech" />
-                                Bukti Pencairan Kedai
-                              </h3>
-                              <p className="text-xs text-ink-secondary mt-0.5">
-                                Daftar pencairan yang sudah dicatat (simulasi)
-                              </p>
-                            </div>
-                            <span className="font-mono text-xs font-semibold text-ink-muted">
-                              {settlementBatches.length} Bukti
-                            </span>
-                          </div>
-
-                          {settlementBatches.length === 0 ? (
-                            <p className="py-8 text-center text-sm text-ink-muted">
-                              Belum ada pencairan.
-                            </p>
-                          ) : (
-                            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                              {settlementBatches.map((b) => (
-                                <div
-                                  key={b.id}
-                                  className="p-3.5 bg-surface border border-line/60 rounded-xl flex items-center justify-between gap-3"
-                                >
-                                  <div className="min-w-0 space-y-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-mono text-xs font-bold text-ink-primary">
-                                        {b.id}
-                                      </span>
-                                      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emeraldTech/12 text-emeraldTech">
-                                        SELESAI
-                                      </span>
-                                    </div>
-                                    <p className="text-sm text-ink-primary font-semibold truncate">
-                                      {b.merchant_name}
-                                    </p>
-                                    <p className="text-xs text-ink-secondary truncate">
-                                      {b.bank_account} ·{" "}
-                                      {formatDateTime(b.settled_at)}
-                                    </p>
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    <p className="font-mono text-sm font-bold text-emeraldTech tabular-nums">
-                                      {formatRupiah(b.total_amount_idr)}
-                                    </p>
-                                    <p className="text-xs text-ink-muted tabular-nums">
-                                      {b.voucher_count} kupon
-                                    </p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-3 border-t border-line/45 flex items-center justify-between gap-2 text-xs">
-                          <span className="font-mono text-ink-secondary tabular-nums">
-                            Total Cair:{" "}
-                            <strong className="text-ink-primary">
-                              {formatRupiah(totalSettledBatchesIdr)}
-                            </strong>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => window.print()}
-                            className="no-print inline-flex items-center gap-1.5 font-bold text-ink-primary hover:underline"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>Cetak</span>
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
+                  <ClearinghouseTab
+                    lang={lang}
+                    currentUser={currentUser}
+                    poolTotalIdr={poolTotalIdr}
+                    totalUnsettledIdr={totalUnsettledIdr}
+                    totalSettledBatchesIdr={totalSettledBatchesIdr}
+                    merchants={merchants}
+                    ledger={ledger}
+                    reconciliationLogs={reconciliationLogs}
+                    settlementBatches={settlementBatches}
+                    showFullHashes={showFullHashes}
+                    setShowFullHashes={setShowFullHashes}
+                    isVerifyingChain={isVerifyingChain}
+                    chainCheckResult={chainCheckResult}
+                    onSettleMerchants={handleSettleMerchants}
+                    onVerifyHashChain={handleVerifyHashChain}
+                    onExportJson={handleExportJson}
+                  />
                 )}
 
                 {/* TAB 5: LAPORAN */}
@@ -4227,7 +2345,9 @@ export default function CivicLedgerApp() {
                       } else {
                         showToast(
                           "info",
-                          "Menu ini hanya untuk akun Pengurus. Keluar lalu masuk pakai akun Pengurus."
+                          lang === "en"
+                            ? "This menu is reserved for Organizers."
+                            : "Menu ini hanya untuk akun Pengurus."
                         );
                       }
                     }}
@@ -4240,118 +2360,23 @@ export default function CivicLedgerApp() {
       </div>
 
       {/* MODAL GANTI KATA SANDI */}
-      {showChangePasswordModal && (
-        <div
-          onClick={() => setShowChangePasswordModal(false)}
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-card border border-line rounded-2xl shadow-xl p-6 space-y-4"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-bold text-ink-primary flex items-center gap-2">
-                  <KeyRound className="w-5 h-5 text-emeraldTech" />
-                  Ganti Kata Sandi
-                </h2>
-                <p className="text-xs text-ink-muted mt-0.5">
-                  {currentUser.name} ({currentUser.email})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowChangePasswordModal(false)}
-                className="p-1 text-ink-muted hover:text-ink-primary"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {cpError && (
-              <div className="p-3 rounded-xl bg-roseTech/10 border border-roseTech/35 text-xs font-semibold text-roseTech">
-                {cpError}
-              </div>
-            )}
-
-            <form onSubmit={handleChangePasswordSubmit} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-ink-primary">
-                  Kata Sandi Lama
-                </label>
-                <input
-                  type={cpShowPass ? "text" : "password"}
-                  required
-                  value={cpOldPass}
-                  onChange={(e) => setCpOldPass(e.target.value)}
-                  placeholder="Masukkan kata sandi lama"
-                  className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-ink-primary">
-                  Kata Sandi Baru (min. 6 karakter)
-                </label>
-                <div className="relative">
-                  <input
-                    type={cpShowPass ? "text" : "password"}
-                    required
-                    minLength={6}
-                    value={cpNewPass}
-                    onChange={(e) => setCpNewPass(e.target.value)}
-                    placeholder="Masukkan kata sandi baru"
-                    className="w-full h-11 pl-3.5 pr-11 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCpShowPass(!cpShowPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary"
-                  >
-                    {cpShowPass ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-ink-primary">
-                  Ulangi Kata Sandi Baru
-                </label>
-                <input
-                  type={cpShowPass ? "text" : "password"}
-                  required
-                  minLength={6}
-                  value={cpConfirmPass}
-                  onChange={(e) => setCpConfirmPass(e.target.value)}
-                  placeholder="Ketik ulang kata sandi baru"
-                  className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowChangePasswordModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={cpBusy}
-                  className="px-5 py-2.5 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-bold transition shadow-sm"
-                >
-                  {cpBusy ? "Menyimpan..." : "Simpan"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <PasswordModal
+        lang={lang}
+        currentUser={currentUser}
+        open={showChangePasswordModal}
+        cpError={cpError}
+        cpOldPass={cpOldPass}
+        setCpOldPass={setCpOldPass}
+        cpNewPass={cpNewPass}
+        setCpNewPass={setCpNewPass}
+        cpConfirmPass={cpConfirmPass}
+        setCpConfirmPass={setCpConfirmPass}
+        cpShowPass={cpShowPass}
+        setCpShowPass={setCpShowPass}
+        cpBusy={cpBusy}
+        onClose={() => setShowChangePasswordModal(false)}
+        onSubmit={handleChangePasswordSubmit}
+      />
     </div>
   );
 }

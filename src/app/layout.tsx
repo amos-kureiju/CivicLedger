@@ -20,7 +20,11 @@ export const metadata: Metadata = {
     "Platform pembagian dan penukaran kupon sembako di kedai mitra yang tetap bisa dipakai saat sinyal internet tidak tersedia.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
 };
 

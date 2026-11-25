@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import BrandLogo from "../components/BrandLogo";
 import { AppPalette, ThemeMode, fs } from "../theme";
 import { AuthUser } from "../types";
 import {
@@ -180,7 +181,7 @@ export default function AuthScreen({
         >
           <View style={styles.topUtilityRow}>
             <View style={styles.brandPill}>
-              <Ionicons name="leaf-outline" size={16} color="#FFFFFF" />
+              <BrandLogo size={22} />
               <Text style={styles.brandPillText}>CivicLedger</Text>
             </View>
 
@@ -234,7 +235,7 @@ export default function AuthScreen({
               </Pressable>
             ) : (
               <View style={styles.heroIconCircle}>
-                <Ionicons name="qr-code-outline" size={26} color="#FFFFFF" />
+                <BrandLogo size={46} />
               </View>
             )}
 

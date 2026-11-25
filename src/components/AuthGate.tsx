@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import {
-  HeartHandshake,
   ShieldCheck,
   WifiOff,
   QrCode,
@@ -23,67 +22,71 @@ import {
   LogIn,
 } from "lucide-react";
 import { AuthRole, AuthUser } from "@/lib/types";
+import { AppLang, UI_COPY } from "@/lib/i18n";
+import BrandLogo from "@/components/BrandLogo";
 
 type AuthScreenMode = "LOGIN" | "RESET" | "REGISTER";
 type ThemeMode = "light" | "dark";
 
 interface AuthGateProps {
+  lang: AppLang;
   theme: ThemeMode;
   largeText: boolean;
+  onToggleLang: (next: AppLang) => void;
   onToggleTheme: (next: ThemeMode) => void;
   onToggleLargeText: (next: boolean) => void;
   onAuthenticated: (user: AuthUser) => void;
 }
 
 const DEMO_ACCOUNTS: Array<{
-  title: string;
+  titleId: string;
+  titleEn: string;
   subtitle: string;
   email: string;
   phone: string;
   password: string;
   role: AuthRole;
-  badge: string;
+  badgeId: string;
+  badgeEn: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
   {
-    title: "Pengurus Bansos",
-    subtitle: "St. Darwin Pasaribu · Koordinator",
+    titleId: "Pengurus Bansos",
+    titleEn: "Community Organizer",
+    subtitle: "St. Darwin Pasaribu · Koordinator Komunitas",
     email: "pengurus@civicledger.id",
     phone: "0811-6200-0101",
     password: "pengurus2026",
     role: "COORDINATOR",
-    badge: "Semua Menu",
+    badgeId: "Portal Pengurus",
+    badgeEn: "Organizer Portal",
     icon: Users,
   },
   {
-    title: "Pemilik Kedai",
-    subtitle: "Marta Br. Sihombing · Kedai Mitra",
+    titleId: "Pemilik Toko / Kedai",
+    titleEn: "Local Store Owner",
+    subtitle: "Marta Br. Sihombing · Kasir Web & Scan Kamera QR",
     email: "kedai@civicledger.id",
     phone: "0812-6300-4821",
     password: "kedai2026",
     role: "MERCHANT",
-    badge: "Kasir Kedai",
+    badgeId: "Kasir & Scan QR",
+    badgeEn: "POS & QR Camera",
     icon: Store,
-  },
-  {
-    title: "Warga Penerima",
-    subtitle: "Op. Rina Br. Napitupulu · Warga",
-    email: "warga@civicledger.id",
-    phone: "0812-6311-4401",
-    password: "warga2026",
-    role: "BENEFICIARY",
-    badge: "Kupon Saya",
-    icon: UserCheck,
   },
 ];
 
 export default function AuthGate({
+  lang,
   theme,
   largeText,
+  onToggleLang,
   onToggleTheme,
   onToggleLargeText,
   onAuthenticated,
 }: AuthGateProps) {
+  const t = UI_COPY[lang];
+  const en = lang === "en";
   const [mode, setMode] = useState<AuthScreenMode>("LOGIN");
   const [busy, setBusy] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{
@@ -111,7 +114,7 @@ export default function AuthGate({
   const [regName, setRegName] = useState<string>("");
   const [regEmail, setRegEmail] = useState<string>("");
   const [regPhone, setRegPhone] = useState<string>("");
-  const [regRole, setRegRole] = useState<AuthRole>("BENEFICIARY");
+  const [regRole] = useState<AuthRole>("COORDINATOR");
   const [regPassword, setRegPassword] = useState<string>("");
   const [showRegPassword, setShowRegPassword] = useState<boolean>(false);
 
@@ -138,6 +141,27 @@ export default function AuthGate({
         setFeedback({
           type: "error",
           text: data.error || "Gagal masuk. Periksa lagi email dan sandi.",
+        });
+        return;
+      }
+      if (data.user?.role !== "COORDINATOR") {
+        await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "LOGOUT" }),
+        }).catch(() => {});
+        setFeedback({
+          type: "error",
+          text: "Website ini khusus untuk Pengurus Bansos. Warga penerima & pemilik kedai silakan masuk lewat aplikasi HP CivicLedger.",
+        });
+        return;
+      }
+      if (data.user?.role !== "COORDINATOR" && data.user?.role !== "MERCHANT") {
+        setFeedback({
+          type: "info",
+          text: en
+            ? "Beneficiary accounts use the CivicLedger Mobile App to show their QR voucher. Organizers and Store Owners can sign in here."
+            : "Akun Warga Penerima menggunakan Aplikasi Mobile CivicLedger di HP untuk menunjukkan QR kupon. Portal web ini untuk Pengurus & Pemilik Toko.",
         });
         return;
       }
@@ -282,6 +306,15 @@ export default function AuthGate({
         });
         return;
       }
+      if (data.user?.role !== "COORDINATOR" && data.user?.role !== "MERCHANT") {
+        setFeedback({
+          type: "info",
+          text: en
+            ? "Beneficiary accounts use the CivicLedger Mobile App to show their QR voucher. Organizers and Store Owners can sign in here."
+            : "Akun Warga Penerima menggunakan Aplikasi Mobile CivicLedger di HP untuk menunjukkan QR kupon. Portal web ini untuk Pengurus & Pemilik Toko.",
+        });
+        return;
+      }
       onAuthenticated(data.user);
     } catch {
       setFeedback({
@@ -299,24 +332,47 @@ export default function AuthGate({
       <header className="w-full border-b border-line/60 bg-surface/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-cta-bg text-cta-ink flex items-center justify-center shadow-sm">
-              <HeartHandshake className="w-5 h-5" />
-            </div>
+            <BrandLogo size={38} className="shrink-0 shadow-sm rounded-xl" />
             <div>
               <span className="font-bold text-base tracking-[-0.015em] text-ink-primary block leading-tight">
                 CivicLedger
               </span>
               <span className="text-xs text-ink-muted">
-                Kupon Bantuan Sembako Masyarakat
+                {t.brandSub}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="inline-flex bg-nested p-0.5 rounded-lg border border-line">
+              <button
+                type="button"
+                onClick={() => onToggleLang("id")}
+                className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition ${
+                  lang === "id"
+                    ? "bg-card text-ink-primary shadow-sm"
+                    : "text-ink-muted hover:text-ink-primary"
+                }`}
+              >
+                ID
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleLang("en")}
+                className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition ${
+                  lang === "en"
+                    ? "bg-card text-ink-primary shadow-sm"
+                    : "text-ink-muted hover:text-ink-primary"
+                }`}
+              >
+                EN
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => onToggleLargeText(!largeText)}
-              title="Ubah ukuran tulisan"
+              title={en ? "Toggle text size" : "Ubah ukuran tulisan"}
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition ${
                 largeText
                   ? "bg-cta-bg text-cta-ink border-cta-bg"
@@ -324,24 +380,26 @@ export default function AuthGate({
               }`}
             >
               <Type className="w-3.5 h-3.5" />
-              <span>{largeText ? "Huruf Besar" : "Perbesar Huruf"}</span>
+              <span className="hidden sm:inline">
+                {largeText ? t.largeTextOn : t.largeTextOff}
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => onToggleTheme(theme === "dark" ? "light" : "dark")}
-              title="Ganti tema layar"
+              title={en ? "Switch theme" : "Ganti tema layar"}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-card hover:bg-nested border border-line text-xs font-semibold text-ink-primary transition"
             >
               {theme === "dark" ? (
                 <>
                   <Sun className="w-3.5 h-3.5 text-amberTech" />
-                  <span className="hidden sm:inline">Mode Siang</span>
+                  <span className="hidden sm:inline">{t.dayMode}</span>
                 </>
               ) : (
                 <>
                   <Moon className="w-3.5 h-3.5 text-ink-muted" />
-                  <span className="hidden sm:inline">Mode Malam</span>
+                  <span className="hidden sm:inline">{t.nightMode}</span>
                 </>
               )}
             </button>
@@ -356,18 +414,16 @@ export default function AuthGate({
           <div className="lg:col-span-6 space-y-6 lg:pt-4">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emeraldTech/12 border border-emeraldTech/30 text-emeraldTech text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-emeraldTech" />
-              <span>Bantuan Pangan Komunitas · STACK 2026</span>
+              <span>{t.auth.badge}</span>
             </div>
 
             <div className="space-y-3">
               <h1 className="text-3xl sm:text-4xl font-bold tracking-[-0.025em] text-ink-primary leading-tight">
-                Pembagian Kupon Sembako{" "}
-                <span className="text-emeraldTech">Untuk Masyarakat</span>
+                {t.auth.heroLine1}{" "}
+                <span className="text-emeraldTech">{t.auth.heroAccent}</span>
               </h1>
               <p className="text-[15px] text-ink-secondary leading-relaxed max-w-xl">
-                Catat penerima bansos, bagikan kupon sembako, dan tukar di
-                kedai mitra terdekat. Tetap bisa dipakai walau sinyal sedang
-                tidak ada.
+                {t.auth.heroDesc}
               </p>
             </div>
 
@@ -378,11 +434,10 @@ export default function AuthGate({
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-ink-primary">
-                    Bisa Pakai QR atau Kertas
+                    {t.auth.feat1Title}
                   </h2>
                   <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
-                    Warga yang punya HP cukup tunjukkan QR. Yang tidak pakai
-                    HP cukup bawa kode kupon yang dicetak di kertas.
+                    {t.auth.feat1Desc}
                   </p>
                 </div>
               </div>
@@ -393,11 +448,10 @@ export default function AuthGate({
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-ink-primary">
-                    Jalan Saat Sinyal Susah
+                    {t.auth.feat2Title}
                   </h2>
                   <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
-                    Kedai tetap bisa mengecek kupon tanpa internet. Catatan
-                    disimpan dulu di HP lalu dikirim saat sinyal masuk.
+                    {t.auth.feat2Desc}
                   </p>
                 </div>
               </div>
@@ -408,11 +462,10 @@ export default function AuthGate({
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-ink-primary">
-                    Cegah Kupon Palsu &amp; Ganda
+                    {t.auth.feat3Title}
                   </h2>
                   <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
-                    Kupon cuma bisa dipakai sekali. Kalau ada yang coba ubah
-                    nominal atau tukar dua kali, sistem langsung menolak.
+                    {t.auth.feat3Desc}
                   </p>
                 </div>
               </div>
@@ -810,19 +863,11 @@ export default function AuthGate({
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-ink-primary">
-                      Daftar Sebagai
-                    </label>
-                    <select
-                      value={regRole}
-                      onChange={(e) => setRegRole(e.target.value as AuthRole)}
-                      className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                    >
-                      <option value="BENEFICIARY">Warga Penerima</option>
-                      <option value="MERCHANT">Pemilik Kedai / Warung</option>
-                      <option value="COORDINATOR">Pengurus Bansos</option>
-                    </select>
+                  <div className="p-3 rounded-xl bg-emeraldTech/10 border border-emeraldTech/25 text-xs text-ink-secondary">
+                    Pendaftaran melalui portal web otomatis membuat akun{" "}
+                    <strong className="text-emeraldTech">Pengurus Bansos</strong>.
+                    Untuk Warga Penerima dan Pemilik Kedai, silakan mendaftar
+                    lewat aplikasi HP CivicLedger.
                   </div>
 
                   <div className="space-y-1">
@@ -865,14 +910,14 @@ export default function AuthGate({
               )}
             </div>
 
-            {/* 3 Akun Demo */}
+            {/* Akun Demo Pengurus */}
             <div className="bg-card border border-line/75 rounded-2xl p-5 space-y-3 shadow-sm">
               <div>
                 <h3 className="text-sm font-bold text-ink-primary">
-                  Akun Uji Coba
+                  {t.auth.primaryWebTitle}
                 </h3>
-                <p className="text-xs text-ink-muted">
-                  Klik Masuk untuk mencoba langsung sesuai peran.
+                <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">
+                  {t.auth.primaryWebDesc}
                 </p>
               </div>
 
@@ -882,26 +927,27 @@ export default function AuthGate({
                   return (
                     <div
                       key={acc.email}
-                      className="p-3 rounded-xl bg-surface border border-line/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                      className="p-3.5 rounded-xl bg-surface border border-emeraldTech/35 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
                     >
                       <div className="flex items-start gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-nested text-emeraldTech flex items-center justify-center shrink-0">
+                        <div className="w-9 h-9 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center shrink-0">
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[13px] font-bold text-ink-primary">
-                              {acc.title}
+                              {en ? acc.titleEn : acc.titleId}
                             </span>
                             <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-emeraldTech/12 text-emeraldTech">
-                              {acc.badge}
+                              {en ? acc.badgeEn : acc.badgeId}
                             </span>
                           </div>
                           <p className="text-xs text-ink-secondary truncate">
                             {acc.subtitle}
                           </p>
                           <p className="font-mono text-[11px] text-ink-muted mt-0.5">
-                            {acc.email} · sandi: <strong>{acc.password}</strong>
+                            {acc.email} · {en ? "pass:" : "sandi:"}{" "}
+                            <strong>{acc.password}</strong>
                           </p>
                         </div>
                       </div>
@@ -917,7 +963,7 @@ export default function AuthGate({
                           }}
                           className="px-2.5 py-1.5 rounded-lg bg-nested hover:bg-elevated text-xs font-semibold text-ink-primary transition"
                         >
-                          Isi
+                          {t.auth.fillBtn}
                         </button>
                         <button
                           type="button"
@@ -927,12 +973,26 @@ export default function AuthGate({
                           }
                           className="px-3 py-1.5 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold transition"
                         >
-                          Masuk
+                          {t.auth.loginBtn}
                         </button>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="pt-2.5 border-t border-line/50 text-xs text-ink-muted leading-relaxed space-y-1">
+                <p>
+                  <strong className="text-ink-primary">
+                    {en ? "Field Users (Mobile App):" : "Pengguna Lapangan (Aplikasi HP):"}
+                  </strong>{" "}
+                  {en
+                    ? "Beneficiaries and Local Merchants use the CivicLedger Mobile App (Expo / React Native)."
+                    : "Warga penerima bansos & pemilik kedai sembako masuk melalui Aplikasi Mobile CivicLedger di HP."}
+                </p>
+                <p className="font-mono text-[11px]">
+                  {en ? "Mobile Demo:" : "Akun Mobile:"} warga@civicledger.id (warga2026) · kedai@civicledger.id (kedai2026)
+                </p>
               </div>
             </div>
           </div>

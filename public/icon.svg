@@ -1,6 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="24" fill="#18181B"/>
-  <rect x="2" y="2" width="124" height="124" rx="22" fill="none" stroke="#3F3F46" stroke-width="4"/>
-  <path d="M36 44h56M36 64h38M36 84h56" stroke="#FAFAFA" stroke-width="8" stroke-linecap="square"/>
-  <rect x="82" y="56" width="12" height="16" fill="#A1A1AA"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="clBg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#228161"/>
+      <stop offset="100%" stop-color="#14563F"/>
+    </linearGradient>
+    <linearGradient id="clSeal" x1="74" y1="52" x2="96" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F29F4B"/>
+      <stop offset="100%" stop-color="#C86A1E"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#clBg)"/>
+  <rect x="6" y="6" width="116" height="116" rx="26" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="2"/>
+  <!-- Notched Voucher Card (subtle 6px notches for crisp breathing room) -->
+  <path d="M32 34H96C101.523 34 106 38.4772 106 44V58C102.686 58 100 60.6863 100 64C100 67.3137 102.686 70 106 70V84C106 89.5228 101.523 94 96 94H32C26.4772 94 22 89.5228 22 84V70C25.3137 70 28 67.3137 28 64C28 60.6863 25.3137 58 22 58V44C22 38.4772 26.4772 34 32 34Z" fill="#FAF7F2"/>
+  <!-- Three Ledger Bars -->
+  <rect x="34" y="47" width="26" height="7" rx="3.5" fill="#1B6B50"/>
+  <rect x="34" y="60.5" width="21" height="7" rx="3.5" fill="#1B6B50" fill-opacity="0.72"/>
+  <rect x="34" y="74" width="15" height="7" rx="3.5" fill="#D47424"/>
+  <!-- Vertical Perforation -->
+  <line x1="67" y1="43" x2="67" y2="85" stroke="#DDD3C4" stroke-width="2.5" stroke-dasharray="4 4" stroke-linecap="round"/>
+  <!-- Verified Amber Check Seal (centered cleanly inside right stub) -->
+  <circle cx="84" cy="64" r="11.5" fill="url(#clSeal)"/>
+  <path d="M78.8 64.2L82.3 67.7L89.4 60.4" stroke="#FAF7F2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
