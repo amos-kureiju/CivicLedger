@@ -47,18 +47,18 @@ const DEMO_ACCOUNTS: Array<{
 }> = [
   {
     title: "Pengurus Bansos",
-    subtitle: "St. Darwin Pasaribu · Laguboti",
-    email: "pengurus@toba.id",
+    subtitle: "St. Darwin Pasaribu · Koordinator",
+    email: "pengurus@civicledger.id",
     phone: "0811-6200-0101",
-    password: "toba2026",
+    password: "pengurus2026",
     role: "COORDINATOR",
     badge: "Semua Menu",
     icon: Users,
   },
   {
     title: "Pemilik Kedai",
-    subtitle: "Marta Br. Sihombing · Balige",
-    email: "kedai@toba.id",
+    subtitle: "Marta Br. Sihombing · Kedai Mitra",
+    email: "kedai@civicledger.id",
     phone: "0812-6300-4821",
     password: "kedai2026",
     role: "MERCHANT",
@@ -67,8 +67,8 @@ const DEMO_ACCOUNTS: Array<{
   },
   {
     title: "Warga Penerima",
-    subtitle: "Op. Rina Br. Napitupulu · Sitoluama",
-    email: "warga@toba.id",
+    subtitle: "Op. Rina Br. Napitupulu · Warga",
+    email: "warga@civicledger.id",
     phone: "0812-6311-4401",
     password: "warga2026",
     role: "BENEFICIARY",
@@ -307,7 +307,7 @@ export default function AuthGate({
                 CivicLedger
               </span>
               <span className="text-xs text-ink-muted">
-                Kupon Bansos Sembako · Kab. Toba
+                Kupon Bantuan Sembako Masyarakat
               </span>
             </div>
           </div>
@@ -356,18 +356,18 @@ export default function AuthGate({
           <div className="lg:col-span-6 space-y-6 lg:pt-4">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emeraldTech/12 border border-emeraldTech/30 text-emeraldTech text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-emeraldTech" />
-              <span>Bantuan Pangan Kab. Toba · STACK 2026</span>
+              <span>Bantuan Pangan Komunitas · STACK 2026</span>
             </div>
 
             <div className="space-y-3">
               <h1 className="text-3xl sm:text-4xl font-bold tracking-[-0.025em] text-ink-primary leading-tight">
                 Pembagian Kupon Sembako{" "}
-                <span className="text-emeraldTech">Wilayah Toba</span>
+                <span className="text-emeraldTech">Untuk Masyarakat</span>
               </h1>
               <p className="text-[15px] text-ink-secondary leading-relaxed max-w-xl">
                 Catat penerima bansos, bagikan kupon sembako, dan tukar di
-                kedai sekitar Balige, Laguboti, sampai Porsea. Tetap bisa
-                dipakai walau sinyal sedang tidak ada.
+                kedai mitra terdekat. Tetap bisa dipakai walau sinyal sedang
+                tidak ada.
               </p>
             </div>
 
@@ -504,7 +504,7 @@ export default function AuthGate({
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Contoh: pengurus@toba.id atau 0811-6200-0101"
+                      placeholder="Contoh: pengurus@civicledger.id atau 0811-6200-0101"
                       className="w-full h-12 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none transition"
                     />
                   </div>
@@ -598,7 +598,7 @@ export default function AuthGate({
                           required
                           value={resetIdentifier}
                           onChange={(e) => setResetIdentifier(e.target.value)}
-                          placeholder="Contoh: warga@toba.id atau 0812-6311-4401"
+                          placeholder="Contoh: warga@civicledger.id atau 0812-6311-4401"
                           className="w-full h-12 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none transition"
                         />
                       </div>
@@ -791,7 +791,7 @@ export default function AuthGate({
                         required
                         value={regEmail}
                         onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="mangasi@toba.id"
+                        placeholder="nama@civicledger.id"
                         className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
                       />
                     </div>

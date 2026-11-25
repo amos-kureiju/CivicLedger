@@ -101,7 +101,7 @@ export default function ReportsComplianceTab({
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pb-4 border-b border-line/55">
         <div>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary">
-            Laporan Bansos Wilayah Toba
+            Laporan Penyaluran Bansos
           </h1>
           <p className="text-sm text-ink-secondary mt-0.5">
             Ringkasan pembagian kupon sembako dan tombol unduh laporan.
@@ -364,9 +364,9 @@ export default function ReportsComplianceTab({
                 <code>scrypt</code> + cookie sesi HMAC).
               </li>
               <li>
-                Data 20 penerima bansos wilayah Toba, 4 kedai mitra, pembuatan
-                kupon bertanda tangan HMAC-SHA256, QR, kode kertas, dan tombol
-                Huruf Besar.
+                Data contoh 20 penerima bansos &amp; 4 kedai mitra (simulasi
+                komunitas lokal), pembuatan kupon bertanda tangan HMAC-SHA256,
+                QR, kode kertas, dan tombol Huruf Besar.
               </li>
               <li>
                 Kasir Kedai offline (Web Crypto API + IndexedDB) dengan

@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "CivicLedger Toba",
-    "slug": "civicledger-toba",
+    "name": "CivicLedger",
+    "slug": "civicledger-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "id.toba.civicledger"
+      "bundleIdentifier": "id.civicledger.app"
     },
     "android": {
-      "package": "id.toba.civicledger",
+      "package": "id.civicledger.app",
       "adaptiveIcon": {
         "backgroundColor": "#1B6B50",
         "foregroundImage": "./assets/android-icon-foreground.png",

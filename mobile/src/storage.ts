@@ -10,8 +10,8 @@ import { buildMobileSeedState, DEFAULT_ACCOUNTS } from "./seed";
 import { ThemeMode } from "./theme";
 
 const KEYS = {
-  USER: "cl_mob_user_v2",
-  ACCOUNTS: "cl_mob_accounts_v2",
+  USER: "cl_mob_user_v4",
+  ACCOUNTS: "cl_mob_accounts_v4",
   STATE: "cl_mob_state_v1",
   OFFLINE_QUEUE: "cl_mob_offline_queue_v1",
   REDEEMED_IDS: "cl_mob_redeemed_ids_v1",
@@ -179,11 +179,11 @@ export async function mobileLogin(
       try {
         const data = await res.json();
         if (res.ok && data.user) {
-          if (data.user.role !== "BENEFICIARY") {
+          if (data.user.role === "COORDINATOR") {
             return {
               ok: false,
               error:
-                "Aplikasi HP ini khusus untuk Warga Penerima. Pemilik kedai & pengurus silakan masuk lewat website.",
+                "Akun Pengurus Bansos menggunakan portal web CivicLedger di komputer/laptop.",
             };
           }
           await saveUserSession(data.user);
@@ -368,6 +368,9 @@ export async function mobileRegister(
     };
   }
 
+  const safeRole: AuthRole =
+    params.role === "MERCHANT" ? "MERCHANT" : "BENEFICIARY";
+
   if (serverUrl.trim()) {
     const res = await fetchWithTimeout(
       `${serverUrl.replace(/\/$/, "")}/api/auth`,
@@ -377,7 +380,7 @@ export async function mobileRegister(
         body: JSON.stringify({
           action: "REGISTER",
           ...params,
-          role: "BENEFICIARY",
+          role: safeRole,
         }),
       }
     );
@@ -403,14 +406,17 @@ export async function mobileRegister(
   }
 
   const created: LocalAccountRecord = {
-    id: `USR-WARGA-${Date.now().toString(36).toUpperCase()}`,
+    id: `USR-${safeRole === "MERCHANT" ? "KEDAI" : "WARGA"}-${Date.now().toString(36).toUpperCase()}`,
     name: params.name.trim(),
     email: params.email.trim().toLowerCase(),
     phone: params.phone.trim(),
-    role: "BENEFICIARY",
-    role_label: "Warga Penerima",
+    role: safeRole,
+    role_label:
+      safeRole === "MERCHANT" ? "Pemilik Kedai Sembako" : "Warga Penerima",
     rt_rw: params.rt_rw?.trim() || "Desa Sitoluama, Laguboti",
-    linked_beneficiary_id: "WGA-0401",
+    linked_beneficiary_id:
+      safeRole === "BENEFICIARY" ? "WGA-0401" : undefined,
+    linked_merchant_id: safeRole === "MERCHANT" ? "WRG-01" : undefined,
     password: params.password,
   };
 

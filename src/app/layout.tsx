@@ -15,9 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CivicLedger — Kupon Sembako Wilayah Toba",
+  title: "CivicLedger — Kupon Sembako Masyarakat",
   description:
-    "Aplikasi pembagian dan penukaran kupon sembako di kedai sekitar Toba yang tetap bisa dipakai saat sinyal tidak ada.",
+    "Platform pembagian dan penukaran kupon sembako di kedai mitra yang tetap bisa dipakai saat sinyal internet tidak tersedia.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",

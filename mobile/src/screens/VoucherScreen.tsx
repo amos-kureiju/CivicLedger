@@ -50,7 +50,7 @@ export default function VoucherScreen({
     : "";
 
   const handleShareSms = async (v: Voucher) => {
-    const msg = `[Kupon Bansos Toba]\nNama: ${v.beneficiary_name}\nKode Kupon: ${v.short_code}\nPaket: ${v.commodity_name} (${formatRupiah(v.nominal_idr)})\nBerlaku s/d: ${formatDateTime(v.expires_at)}\nTunjukkan kode ini ke kedai mitra terdekat.`;
+    const msg = `[Kupon Sembako CivicLedger]\nNama: ${v.beneficiary_name}\nKode Kupon: ${v.short_code}\nPaket: ${v.commodity_name} (${formatRupiah(v.nominal_idr)})\nBerlaku s/d: ${formatDateTime(v.expires_at)}\nTunjukkan kode ini ke kedai mitra terdekat.`;
     try {
       await Share.share({ message: msg });
     } catch {
@@ -156,7 +156,7 @@ export default function VoucherScreen({
                   letterSpacing: 0.6,
                 }}
               >
-                KUPON SEMBAKO TOBA
+                KUPON SEMBAKO WARGA
               </Text>
             </View>
             <View

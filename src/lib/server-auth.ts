@@ -6,7 +6,7 @@ import { AuthRole, AuthUser } from "./types";
 const AUTH_FILE = path.join(process.cwd(), ".civicledger-auth.json");
 const SESSION_SECRET =
   process.env.CIVICLEDGER_SESSION_SECRET ||
-  "CIVICLEDGER_TOBA_SESSION_KEY_2026";
+  "CIVICLEDGER_DEMO_SESSION_KEY_2026";
 export const SESSION_COOKIE_NAME = "civicledger_session";
 
 interface StoredAuthAccount extends AuthUser {
@@ -67,19 +67,19 @@ function buildDefaultAccounts(): AuthStoreData {
         {
           id: "USR-PENGURUS-01",
           name: "St. Darwin Pasaribu",
-          email: "pengurus@toba.id",
+          email: "pengurus@civicledger.id",
           phone: "0811-6200-0101",
           role: "COORDINATOR",
-          role_label: "Pengurus Bansos Toba",
+          role_label: "Pengurus Bansos",
           rt_rw: "Desa Sitoluama, Laguboti",
         },
-        "toba2026"
+        "pengurus2026"
       ),
       makeAccount(
         {
           id: "USR-KEDAI-01",
           name: "Marta Br. Sihombing",
-          email: "kedai@toba.id",
+          email: "kedai@civicledger.id",
           phone: "0812-6300-4821",
           role: "MERCHANT",
           role_label: "Pemilik Kedai Sembako",
@@ -92,7 +92,7 @@ function buildDefaultAccounts(): AuthStoreData {
         {
           id: "USR-WARGA-01",
           name: "Op. Rina Br. Napitupulu",
-          email: "warga@toba.id",
+          email: "warga@civicledger.id",
           phone: "0812-6311-4401",
           role: "BENEFICIARY",
           role_label: "Warga Penerima",
@@ -113,7 +113,7 @@ function loadAuthStore(): AuthStoreData {
       if (
         parsed &&
         Array.isArray(parsed.accounts) &&
-        parsed.accounts.some((a) => a.email === "pengurus@toba.id")
+        parsed.accounts.some((a) => a.email === "pengurus@civicledger.id")
       ) {
         return { accounts: parsed.accounts };
       }

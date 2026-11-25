@@ -1,32 +1,24 @@
-# CivicLedger Warga (Aplikasi HP Penerima Bansos Toba)
+# CivicLedger Mobile (Beneficiary & Local Merchant App)
 
-Aplikasi HP berbasis **React Native + Expo (TypeScript)** yang dirancang khusus untuk **warga penerima bansos** di Kabupaten Toba. Pengurus desa dan pemilik kedai menggunakan portal web utama.
+Aplikasi HP berbasis **React Native + Expo (TypeScript)** yang menyatukan dua pengguna lapangan dalam satu aplikasi komunitas (berlaku untuk komunitas/desa mana pun di Indonesia, dengan data contoh simulasi):
+- **Warga Penerima Bansos** -> Cek kupon sembako, perbesar QR layar penuh, kirim WA/SMS, lihat lokasi kedai mitra + Google Maps, dan cek riwayat bantuan.
+- **Pemilik Kedai Sembako** -> Terima & cek keaslian kupon warga secara **offline (HMAC-SHA256)**, cegah kupon palsu/ganda, simpan catatan saat sinyal hilang, lalu kirim ke pusat saat sinyal normal.
 
-## Fitur Khusus Warga
+Sementara **Pengurus Bansos / Koordinator Komunitas** menggunakan **portal web CivicLedger** di komputer/laptop untuk mendata warga, menerbitkan kupon, memantau rekonsiliasi, mencairkan saldo kedai, dan mengunduh laporan audit.
 
-- **Login Mobile-Native (Khusus Warga):**
-  - Header hijau melengkung dengan sapaan hangat, input nomor HP/email yang sederhana, tombol 1 ketuk masuk cepat warga, serta halaman terpisah untuk **Lupa Sandi (OTP 6 angka)** dan **Daftar Warga** (tanpa pilihan role pengurus/kedai).
-- **Ramah Orang Tua:**
-  - Tombol **Huruf Besar (`A+`)** di bagian atas layar untuk memperbesar tulisan seketika.
-  - Pilihan **Layar Siang / Malam** dan 5 menu bawah sederhana (`Beranda`, `Kupon`, `Kedai`, `Riwayat`, `Profil`).
-- **Kupon QR Layar Penuh & Bagikan WA/SMS:**
-  - Ketuk QR untuk memperbesar ke layar penuh putih cerah agar mudah dipindai di kedai, atau kirim kode pendek ke WhatsApp / SMS keluarga.
-  - Tetap bisa dibuka walaupun sinyal HP sedang hilang.
-- **Kedai Terdekat + Google Maps:**
-  - Daftar 4 kedai mitra di Balige, Laguboti, Sitoluama, dan Porsea lengkap dengan tombol **Buka Lokasi di Google Maps**.
+## Akun Contoh (Data Simulasi)
 
-## Akun Contoh Warga
-
-| Nama Warga | Nomor HP / Email | Kata Sandi |
+| Peran | Nomor HP / Email | Kata Sandi |
 | --- | --- | --- |
-| **Op. Rina Br. Napitupulu** (Sitoluama, Laguboti) | `0812-6311-4401` / `warga@toba.id` | `warga2026` |
-| **Maruli Siahaan** (Tambunan, Balige) | `0852-7019-2812` / `maruli@toba.id` | `warga2026` |
-| **Tiurma Br. Simanjuntak** (Sangkar Nihuta, Balige) | `0813-7540-9103` / `tiurma@toba.id` | `warga2026` |
+| **Warga Penerima** (Op. Rina Br. Napitupulu) | `0812-6311-4401` / `warga@civicledger.id` | `warga2026` |
+| **Warga Penerima** (Maruli Siahaan) | `0852-7019-2812` / `maruli@civicledger.id` | `warga2026` |
+| **Pemilik Kedai** (Marta Br. Sihombing · WRG-01) | `0812-6300-4821` / `kedai@civicledger.id` | `kedai2026` |
+| **Pemilik Kedai** (Binsar Hutabarat · WRG-02) | `0813-6200-9012` / `binsar@civicledger.id` | `kedai2026` |
 
 ## Cara Menjalankan
 
 Dari folder root proyek (`C:\PA2\CivicLedger`):
-- **Di HP (Expo Go lewat tunnel ngrok, paling aman untuk Hotspot/Wi-Fi Public):**
+- **Di HP (Expo Go lewat tunnel ngrok):**
   ```powershell
   npm run mobile:tunnel
   ```

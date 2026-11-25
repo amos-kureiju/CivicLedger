@@ -377,7 +377,7 @@ export default function CivicLedgerApp() {
         if (data?.authenticated && data?.user) {
           applyAuthenticatedUser(data.user);
         } else {
-          // Bersihkan cache user lama jika sesi tidak cocok (misal setelah migrasi akun Toba)
+          // Bersihkan cache user lama jika sesi tidak cocok
           window.localStorage.removeItem("civicledger_last_user");
         }
       })
@@ -386,7 +386,7 @@ export default function CivicLedgerApp() {
           const cached = window.localStorage.getItem("civicledger_last_user");
           if (cached) {
             const parsed = JSON.parse(cached) as AuthUser;
-            if (parsed.email?.endsWith("@toba.id")) {
+            if (parsed.email?.endsWith("@civicledger.id")) {
               applyAuthenticatedUser(parsed);
             }
           }
@@ -844,7 +844,7 @@ export default function CivicLedgerApp() {
   };
 
   const handleCopySmsSlip = (voucher: Voucher) => {
-    const text = `[Kupon Bansos Toba]\nNama: ${voucher.beneficiary_name}\nKode: ${voucher.short_code}\nPaket: ${voucher.commodity_name} (${formatRupiah(voucher.nominal_idr)})\nBerlaku s/d: ${formatDateTime(voucher.expires_at)}\nTunjukkan kode ini di kedai mitra terdekat.`;
+    const text = `[Kupon Sembako CivicLedger]\nNama: ${voucher.beneficiary_name}\nKode: ${voucher.short_code}\nPaket: ${voucher.commodity_name} (${formatRupiah(voucher.nominal_idr)})\nBerlaku s/d: ${formatDateTime(voucher.expires_at)}\nTunjukkan kode ini di kedai mitra terdekat.`;
     navigator.clipboard.writeText(text);
     setCopiedSms(true);
     setTimeout(() => setCopiedSms(false), 2200);
@@ -1302,7 +1302,7 @@ export default function CivicLedgerApp() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `civicledger-toba-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `civicledger-laporan-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     showToast("success", "File Excel (CSV) berhasil diunduh.");
@@ -1311,7 +1311,7 @@ export default function CivicLedgerApp() {
   const handleExportJson = () => {
     const snapshot = {
       diunduh_pada: new Date().toISOString(),
-      proyek: "CivicLedger — Kupon Sembako Wilayah Toba",
+      proyek: "CivicLedger — Resilient Local Voucher Clearinghouse",
       tim: "Run.exe (STACK 2026 by GDGoC ITB — Kasus 2)",
       mesin_backend: backendEngine,
       dana_tersedia_idr: poolTotalIdr,
@@ -1329,7 +1329,7 @@ export default function CivicLedgerApp() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `civicledger-toba-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `civicledger-arsip-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showToast("success", "File arsip (JSON) berhasil diunduh.");
@@ -1530,7 +1530,7 @@ export default function CivicLedgerApp() {
               <span className="font-bold text-[15px] tracking-[-0.015em] text-ink-primary block leading-tight">
                 CivicLedger
               </span>
-              <span className="text-[11px] text-ink-muted">Kab. Toba</span>
+              <span className="text-[11px] text-ink-muted">Kupon Sembako</span>
             </div>
           </div>
         </div>
@@ -1975,7 +1975,7 @@ export default function CivicLedgerApp() {
                           {currentUser.name} · {currentUser.role_label}
                         </p>
                         <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary mt-0.5">
-                          Ringkasan Bansos Wilayah Toba
+                          Ringkasan Penyaluran Bansos
                         </h1>
                         <p className="text-sm text-ink-secondary mt-0.5">
                           Lihat sisa dana, daftar {beneficiaries.length} warga
@@ -1991,7 +1991,7 @@ export default function CivicLedgerApp() {
                         />
                         {isOfflineMode
                           ? "Offline · Tersimpan di HP"
-                          : "Online · Kab. Toba"}
+                          : "Online · Terhubung"}
                       </span>
                     </div>
 
@@ -2558,7 +2558,7 @@ export default function CivicLedgerApp() {
                                 {vouchers.length} kupon
                               </span>
                               <span className="font-semibold text-emeraldTech">
-                                Kab. Toba
+                                Kupon Sembako
                               </span>
                             </div>
                           </>
@@ -2652,7 +2652,7 @@ export default function CivicLedgerApp() {
                                 {beneficiaries.length} penerima bansos
                               </span>
                               <span className="font-semibold text-emeraldTech">
-                                Wilayah Kab. Toba
+                                Data Simulasi Komunitas
                               </span>
                             </div>
                           </>
@@ -2846,7 +2846,7 @@ export default function CivicLedgerApp() {
                             <div className="flex items-center justify-between pb-4 border-b border-dashed border-line">
                               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emeraldTech">
                                 <HeartHandshake className="w-4 h-4" />
-                                <span>Kupon Sembako Toba</span>
+                                <span>Kupon Sembako Warga</span>
                               </div>
                               <div
                                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${selectedVoucherForQR.status === "ACTIVE"

@@ -31,14 +31,7 @@ interface AuthScreenProps {
 }
 
 type ScreenView = "LOGIN" | "RESET" | "REGISTER";
-
-const WARGA_SAMPLE = {
-  name: "Op. Rina Br. Napitupulu",
-  area: "Desa Sitoluama, Laguboti",
-  phone: "0812-6311-4401",
-  email: "warga@toba.id",
-  pass: "warga2026",
-};
+type MobileRole = "BENEFICIARY" | "MERCHANT";
 
 export default function AuthScreen({
   palette,
@@ -70,7 +63,8 @@ export default function AuthScreen({
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
 
-  // Register (Khusus Warga)
+  // Register (Warga atau Pemilik Kedai)
+  const [regRole, setRegRole] = useState<MobileRole>("BENEFICIARY");
   const [regName, setRegName] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -153,7 +147,7 @@ export default function AuthScreen({
       phone: regPhone,
       rt_rw: regArea,
       password: regPass,
-      role: "BENEFICIARY",
+      role: regRole,
     });
     setBusy(false);
     if (!res.ok) {
@@ -174,7 +168,7 @@ export default function AuthScreen({
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* HERO HEADER KHUSUS MOBILE */}
+        {/* HERO HEADER MELENGKUNG KHUSUS MOBILE */}
         <View
           style={[
             styles.heroHeader,
@@ -184,11 +178,10 @@ export default function AuthScreen({
             },
           ]}
         >
-          {/* Baris Atas: Logo kecil + A+ & Mode Malam */}
           <View style={styles.topUtilityRow}>
             <View style={styles.brandPill}>
               <Ionicons name="leaf-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.brandPillText}>CivicLedger Warga</Text>
+              <Text style={styles.brandPillText}>CivicLedger</Text>
             </View>
 
             <View style={styles.utilGroup}>
@@ -230,7 +223,6 @@ export default function AuthScreen({
             </View>
           </View>
 
-          {/* Sapaan Utama */}
           <View style={styles.heroBody}>
             {view !== "LOGIN" ? (
               <Pressable
@@ -253,10 +245,10 @@ export default function AuthScreen({
               ]}
             >
               {view === "LOGIN"
-                ? "Horas!\nBuka Kupon Sembako Anda"
+                ? "Horas!\nMasuk ke CivicLedger"
                 : view === "RESET"
                   ? "Atur Ulang\nKata Sandi Anda"
-                  : "Daftar Akun\nWarga Penerima"}
+                  : "Buat Akun Baru"}
             </Text>
             <Text
               style={[
@@ -265,20 +257,17 @@ export default function AuthScreen({
               ]}
             >
               {view === "LOGIN"
-                ? "Cek jatah paket sembako, tampilkan QR kupon, dan lihat kedai terdekat di Kabupaten Toba."
+                ? "Satu aplikasi untuk warga penerima kupon dan pemilik kedai sembako mitra."
                 : view === "RESET"
-                  ? "Masukkan nomor HP atau email Anda untuk menerima kode 6 angka."
-                  : "Buat akun pribadi untuk menyimpan kupon bantuan langsung di HP Anda."}
+                  ? "Masukkan nomor HP atau email terdaftar untuk menerima kode 6 angka."
+                  : "Pilih apakah Anda mendaftar sebagai warga penerima atau pemilik kedai mitra."}
             </Text>
           </View>
         </View>
 
-        {/* LEMBAR FORM BAWAH (MOBILE SHEET STYLE) */}
+        {/* LEMBAR FORM BAWAH */}
         <View
-          style={[
-            styles.sheetContainer,
-            { backgroundColor: palette.canvas },
-          ]}
+          style={[styles.sheetContainer, { backgroundColor: palette.canvas }]}
         >
           <View
             style={[
@@ -286,7 +275,6 @@ export default function AuthScreen({
               { backgroundColor: palette.card, borderColor: palette.border },
             ]}
           >
-            {/* Pesan Feedback */}
             {feedback && (
               <View
                 style={[
@@ -343,7 +331,7 @@ export default function AuthScreen({
               </View>
             )}
 
-            {/* ============ TAMPILAN MASUK ============ */}
+            {/* ============ MASUK (OTOMATIS DETEKSI WARGA / KEDAI) ============ */}
             {view === "LOGIN" && (
               <View style={styles.formStack}>
                 <View>
@@ -499,73 +487,101 @@ export default function AuthScreen({
                       fontWeight: "600",
                     }}
                   >
-                    atau coba langsung
+                    coba akun contoh
                   </Text>
                   <View
                     style={[styles.orLine, { backgroundColor: palette.border }]}
                   />
                 </View>
 
-                {/* 1 Tombol Masuk Cepat Khusus Warga */}
-                <Pressable
-                  onPress={() =>
-                    doLogin(WARGA_SAMPLE.email, WARGA_SAMPLE.pass)
-                  }
-                  disabled={busy}
-                  style={({ pressed }) => [
-                    styles.quickWargaBtn,
-                    {
-                      backgroundColor: pressed
-                        ? palette.elevated
-                        : palette.primarySoft,
-                      borderColor: palette.primary,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.quickAvatar,
-                      { backgroundColor: palette.primary },
+                {/* 2 Tombol Masuk Cepat Ringkas (Warga & Pemilik Kedai) */}
+                <View style={styles.quickGrid}>
+                  <Pressable
+                    onPress={() => doLogin("warga@civicledger.id", "warga2026")}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.quickTile,
+                      {
+                        backgroundColor: pressed
+                          ? palette.elevated
+                          : palette.primarySoft,
+                        borderColor: palette.primary,
+                      },
                     ]}
                   >
-                    <Text style={styles.quickAvatarText}>OR</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
+                    <Ionicons
+                      name="person-outline"
+                      size={20}
+                      color={palette.primary}
+                    />
                     <Text
                       style={{
                         color: palette.inkPrimary,
-                        fontSize: fs(14, largeText),
+                        fontSize: fs(13, largeText),
                         fontWeight: "800",
+                        marginTop: 6,
                       }}
                     >
-                      Masuk Cepat ({WARGA_SAMPLE.name})
+                      Warga
                     </Text>
                     <Text
+                      numberOfLines={1}
                       style={{
                         color: palette.inkSecondary,
-                        fontSize: fs(12, largeText),
+                        fontSize: fs(11, largeText),
                       }}
                     >
-                      {WARGA_SAMPLE.area} · {WARGA_SAMPLE.phone}
+                      Op. Rina Napitupulu
                     </Text>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={palette.primary}
-                  />
-                </Pressable>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => doLogin("kedai@civicledger.id", "kedai2026")}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.quickTile,
+                      {
+                        backgroundColor: pressed
+                          ? palette.elevated
+                          : palette.amberSoft,
+                        borderColor: palette.amber,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="storefront-outline"
+                      size={20}
+                      color={palette.amber}
+                    />
+                    <Text
+                      style={{
+                        color: palette.inkPrimary,
+                        fontSize: fs(13, largeText),
+                        fontWeight: "800",
+                        marginTop: 6,
+                      }}
+                    >
+                      Pemilik Kedai
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: palette.inkSecondary,
+                        fontSize: fs(11, largeText),
+                      }}
+                    >
+                      Marta Br. Sihombing
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             )}
 
-            {/* ============ TAMPILAN LUPA SANDI ============ */}
+            {/* ============ LUPA SANDI ============ */}
             {view === "RESET" && (
               <View style={styles.formStack}>
                 <View
-                  style={[
-                    styles.stepChip,
-                    { backgroundColor: palette.nested },
-                  ]}
+                  style={[styles.stepChip, { backgroundColor: palette.nested }]}
                 >
                   <Text
                     style={{
@@ -610,7 +626,7 @@ export default function AuthScreen({
                           value={resetId}
                           onChangeText={setResetId}
                           autoCapitalize="none"
-                          placeholder="0812-6311-4401 atau warga@toba.id"
+                          placeholder="0812-6311-4401 atau warga@civicledger.id"
                           placeholderTextColor={palette.inkMuted}
                           style={[
                             styles.inputInner,
@@ -802,7 +818,7 @@ export default function AuthScreen({
               </View>
             )}
 
-            {/* ============ TAMPILAN DAFTAR WARGA ============ */}
+            {/* ============ DAFTAR (WARGA ATAU KEDAI) ============ */}
             {view === "REGISTER" && (
               <View style={styles.formStack}>
                 <View>
@@ -812,7 +828,74 @@ export default function AuthScreen({
                       { color: palette.inkPrimary, fontSize: fs(13, largeText) },
                     ]}
                   >
-                    Nama Lengkap
+                    Mendaftar Sebagai
+                  </Text>
+                  <View style={styles.quickGrid}>
+                    {(
+                      [
+                        {
+                          id: "BENEFICIARY",
+                          label: "Warga Penerima",
+                          icon: "person-outline",
+                        },
+                        {
+                          id: "MERCHANT",
+                          label: "Pemilik Kedai",
+                          icon: "storefront-outline",
+                        },
+                      ] as const
+                    ).map((item) => {
+                      const active = regRole === item.id;
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => setRegRole(item.id)}
+                          style={[
+                            styles.roleSelectTile,
+                            {
+                              backgroundColor: active
+                                ? palette.primarySoft
+                                : palette.surface,
+                              borderColor: active
+                                ? palette.primary
+                                : palette.border,
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={item.icon}
+                            size={18}
+                            color={
+                              active ? palette.primary : palette.inkSecondary
+                            }
+                          />
+                          <Text
+                            style={{
+                              color: active
+                                ? palette.primary
+                                : palette.inkPrimary,
+                              fontSize: fs(13, largeText),
+                              fontWeight: "700",
+                            }}
+                          >
+                            {item.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View>
+                  <Text
+                    style={[
+                      styles.label,
+                      { color: palette.inkPrimary, fontSize: fs(13, largeText) },
+                    ]}
+                  >
+                    {regRole === "MERCHANT"
+                      ? "Nama Pemilik / Kedai"
+                      : "Nama Lengkap"}
                   </Text>
                   <View
                     style={[
@@ -831,7 +914,11 @@ export default function AuthScreen({
                     <TextInput
                       value={regName}
                       onChangeText={setRegName}
-                      placeholder="Contoh: Mangasi Simatupang"
+                      placeholder={
+                        regRole === "MERCHANT"
+                          ? "Contoh: Kedai Inang Boru Sihombing"
+                          : "Contoh: Mangasi Simatupang"
+                      }
                       placeholderTextColor={palette.inkMuted}
                       style={[
                         styles.inputInner,
@@ -912,7 +999,7 @@ export default function AuthScreen({
                       onChangeText={setRegEmail}
                       autoCapitalize="none"
                       keyboardType="email-address"
-                      placeholder="mangasi@toba.id"
+                      placeholder="nama@civicledger.id"
                       placeholderTextColor={palette.inkMuted}
                       style={[
                         styles.inputInner,
@@ -932,7 +1019,7 @@ export default function AuthScreen({
                       { color: palette.inkPrimary, fontSize: fs(13, largeText) },
                     ]}
                   >
-                    Desa / Kecamatan
+                    Alamat / Desa
                   </Text>
                   <View
                     style={[
@@ -1019,14 +1106,13 @@ export default function AuthScreen({
                       fontWeight: "800",
                     }}
                   >
-                    {busy ? "Mendaftar..." : "Daftar & Buka Kupon"}
+                    {busy ? "Mendaftar..." : "Daftar & Masuk"}
                   </Text>
                 </Pressable>
               </View>
             )}
           </View>
 
-          {/* Footer Ajakan Daftar / Masuk */}
           <View style={styles.footerRow}>
             {view === "LOGIN" ? (
               <Pressable onPress={() => switchView("REGISTER")}>
@@ -1039,7 +1125,7 @@ export default function AuthScreen({
                 >
                   Belum punya akun?{" "}
                   <Text style={{ color: palette.primary, fontWeight: "800" }}>
-                    Daftar sebagai Warga
+                    Daftar di sini
                   </Text>
                 </Text>
               </Pressable>
@@ -1070,8 +1156,8 @@ export default function AuthScreen({
               lineHeight: fs(17, largeText),
             }}
           >
-            Aplikasi HP ini khusus untuk warga penerima bantuan.{"\n"}Pengurus
-            dan pemilik kedai menggunakan portal web CivicLedger.
+            Untuk Warga Penerima &amp; Pemilik Kedai Mitra.{"\n"}
+            Pengurus Bansos menggunakan portal web CivicLedger.
           </Text>
         </View>
       </ScrollView>
@@ -1225,25 +1311,26 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
   },
-  quickWargaBtn: {
+  quickGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    gap: 10,
+  },
+  quickTile: {
+    flex: 1,
     padding: 13,
     borderRadius: 15,
     borderWidth: 1.5,
   },
-  quickAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+  roleSelectTile: {
+    flex: 1,
+    minHeight: 48,
+    paddingHorizontal: 10,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-  },
-  quickAvatarText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
+    gap: 6,
   },
   stepChip: {
     alignSelf: "flex-start",

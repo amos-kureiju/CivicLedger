@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppPalette, fs } from "../theme";
-import { AuthUser, LedgerEntry } from "../types";
+import { AuthUser, LedgerEntry, OfflineRedemptionItem } from "../types";
 import { formatDateTime, formatRupiah } from "../format";
 
 interface HistoryScreenProps {
@@ -10,6 +10,7 @@ interface HistoryScreenProps {
   largeText: boolean;
   user: AuthUser;
   ledger: LedgerEntry[];
+  offlineQueue: OfflineRedemptionItem[];
 }
 
 export default function HistoryScreen({
@@ -17,15 +18,27 @@ export default function HistoryScreen({
   largeText,
   user,
   ledger,
+  offlineQueue,
 }: HistoryScreenProps) {
   const [scope, setScope] = useState<"MINE" | "ALL">("MINE");
+  const isMerchant = user.role === "MERCHANT";
 
-  const myBeneficiaryId = user.linked_beneficiary_id || "WGA-0401";
+  const pendingOffline = useMemo(
+    () => (isMerchant ? offlineQueue.filter((q) => !q.synced) : []),
+    [isMerchant, offlineQueue]
+  );
 
   const filteredLedger = useMemo(() => {
     if (scope === "ALL") return ledger;
-    return ledger.filter((tx) => tx.beneficiary_id === myBeneficiaryId);
-  }, [ledger, scope, myBeneficiaryId]);
+    if (isMerchant) {
+      return ledger.filter(
+        (tx) => tx.merchant_id === (user.linked_merchant_id || "WRG-01")
+      );
+    }
+    return ledger.filter(
+      (tx) => tx.beneficiary_id === (user.linked_beneficiary_id || "WGA-0401")
+    );
+  }, [ledger, scope, isMerchant, user]);
 
   const totalNominal = useMemo(
     () => filteredLedger.reduce((acc, item) => acc + item.nominal_idr, 0),
@@ -37,7 +50,6 @@ export default function HistoryScreen({
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* Ringkasan */}
       <View
         style={[
           styles.summaryCard,
@@ -54,8 +66,10 @@ export default function HistoryScreen({
               }}
             >
               {scope === "MINE"
-                ? "Total Bantuan Diterima"
-                : "Total Penyaluran Wilayah Toba"}
+                ? isMerchant
+                  ? "Total Transaksi Kedai Saya"
+                  : "Total Bantuan Diterima"
+                : "Total Penyaluran Komunitas"}
             </Text>
             <Text
               style={{
@@ -83,7 +97,6 @@ export default function HistoryScreen({
         </View>
       </View>
 
-      {/* Filter Pribadi vs Transparansi Desa */}
       <View
         style={[
           styles.segmented,
@@ -104,7 +117,7 @@ export default function HistoryScreen({
               fontWeight: "700",
             }}
           >
-            Riwayat Saya
+            {isMerchant ? "Kedai Saya" : "Riwayat Saya"}
           </Text>
         </Pressable>
         <Pressable
@@ -125,6 +138,72 @@ export default function HistoryScreen({
           </Text>
         </Pressable>
       </View>
+
+      {pendingOffline.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text
+            style={{
+              color: palette.amber,
+              fontSize: fs(13, largeText),
+              fontWeight: "800",
+            }}
+          >
+            Menunggu Sinyal ({pendingOffline.length})
+          </Text>
+          {pendingOffline.map((item) => (
+            <View
+              key={item.queue_id}
+              style={[
+                styles.txCard,
+                {
+                  backgroundColor: palette.amberSoft,
+                  borderColor: palette.amber,
+                },
+              ]}
+            >
+              <View style={styles.txTop}>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: palette.inkPrimary,
+                      fontSize: fs(14, largeText),
+                      fontWeight: "800",
+                    }}
+                  >
+                    {item.commodity_name}
+                  </Text>
+                  <Text
+                    style={{
+                      color: palette.inkSecondary,
+                      fontSize: fs(12, largeText),
+                    }}
+                  >
+                    {item.short_code} · {item.beneficiary_name}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    color: palette.amber,
+                    fontSize: fs(15, largeText),
+                    fontWeight: "800",
+                  }}
+                >
+                  {formatRupiah(item.nominal_idr)}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  color: palette.amber,
+                  fontSize: fs(11, largeText),
+                  fontWeight: "700",
+                }}
+              >
+                Disimpan offline · {formatDateTime(item.redeemed_at)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {filteredLedger.length === 0 ? (
         <View
@@ -156,83 +235,94 @@ export default function HistoryScreen({
               marginTop: 4,
             }}
           >
-            Setelah kupon Anda ditukar di kedai mitra, buktinya akan tercatat
-            otomatis di sini.
+            Setelah kupon ditukar di kedai mitra, buktinya akan tercatat otomatis
+            di sini.
           </Text>
         </View>
       ) : (
         <View style={{ gap: 10 }}>
-          {filteredLedger.map((tx) => (
-            <View
-              key={tx.id}
-              style={[
-                styles.txCard,
-                {
-                  backgroundColor: palette.card,
-                  borderColor: palette.border,
-                },
-              ]}
-            >
-              <View style={styles.txTop}>
-                <View style={{ flex: 1 }}>
+          {filteredLedger.map((tx) => {
+            const isOfflineSync = tx.sync_mode === "OFFLINE_BATCH_SYNC";
+            return (
+              <View
+                key={tx.id}
+                style={[
+                  styles.txCard,
+                  {
+                    backgroundColor: palette.card,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
+                <View style={styles.txTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: palette.inkPrimary,
+                        fontSize: fs(15, largeText),
+                        fontWeight: "800",
+                      }}
+                    >
+                      {tx.commodity_name}
+                    </Text>
+                    <Text
+                      style={{
+                        color: palette.inkSecondary,
+                        fontSize: fs(13, largeText),
+                        marginTop: 2,
+                      }}
+                    >
+                      {tx.merchant_name}
+                    </Text>
+                  </View>
                   <Text
                     style={{
-                      color: palette.inkPrimary,
+                      color: palette.primary,
                       fontSize: fs(15, largeText),
                       fontWeight: "800",
                     }}
                   >
-                    {tx.commodity_name}
-                  </Text>
-                  <Text
-                    style={{
-                      color: palette.inkSecondary,
-                      fontSize: fs(13, largeText),
-                      marginTop: 2,
-                    }}
-                  >
-                    {tx.merchant_name}
+                    {formatRupiah(tx.nominal_idr)}
                   </Text>
                 </View>
-                <Text
-                  style={{
-                    color: palette.primary,
-                    fontSize: fs(15, largeText),
-                    fontWeight: "800",
-                  }}
-                >
-                  {formatRupiah(tx.nominal_idr)}
-                </Text>
-              </View>
 
-              <View style={styles.txFooter}>
-                <View
-                  style={[
-                    styles.modePill,
-                    { backgroundColor: palette.primarySoft },
-                  ]}
-                >
+                <View style={styles.txFooter}>
+                  <View
+                    style={[
+                      styles.modePill,
+                      {
+                        backgroundColor: isOfflineSync
+                          ? palette.amberSoft
+                          : palette.primarySoft,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: isOfflineSync ? palette.amber : palette.primary,
+                        fontSize: fs(11, largeText),
+                        fontWeight: "700",
+                      }}
+                    >
+                      {isMerchant
+                        ? isOfflineSync
+                          ? "Sinkron Offline"
+                          : "Online"
+                        : "Sudah Diterima"}
+                    </Text>
+                  </View>
                   <Text
                     style={{
-                      color: palette.primary,
-                      fontSize: fs(11, largeText),
-                      fontWeight: "700",
+                      color: palette.inkMuted,
+                      fontSize: fs(12, largeText),
                     }}
                   >
-                    Sudah Diterima
+                    {tx.short_code} · {formatDateTime(tx.timestamp)}
                   </Text>
                 </View>
-                <Text
-                  style={{
-                    color: palette.inkMuted,
-                    fontSize: fs(12, largeText),
-                  }}
-                >
-                  {tx.short_code} · {formatDateTime(tx.timestamp)}
-                </Text>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
     </ScrollView>
