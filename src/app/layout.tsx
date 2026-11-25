@@ -15,9 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CivicLedger — Lembaga Kliring Voucher Bantuan Komunitas",
+  title: "CivicLedger — Kupon Sembako Wilayah Toba",
   description:
-    "Platform kliring voucher pangan lokal berbasis offline-first untuk bantuan gotong royong warga. Tim Run.exe — STACK 2026 (Kasus 2).",
+    "Aplikasi pembagian dan penukaran kupon sembako di kedai sekitar Toba yang tetap bisa dipakai saat sinyal tidak ada.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
@@ -32,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`${inter.variable} ${jetbrainsMono.variable} dark`}
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -42,7 +42,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen bg-[#F7F7F8] text-zinc-900 dark:bg-[#09090B] dark:text-zinc-100 font-sans antialiased selection:bg-zinc-900 selection:text-white dark:selection:bg-zinc-200 dark:selection:text-zinc-950 transition-colors duration-150">
+      <body
+        suppressHydrationWarning
+        className="min-h-screen bg-canvas text-ink-body font-sans antialiased selection:bg-cta-bg selection:text-cta-ink transition-colors duration-200"
+      >
         {children}
       </body>
     </html>

@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	genesisHash     = "0000000000000000000000000000000000000000000000000000000000000000"
-	defaultSecret   = "CIVICLEDGER_RT04_RW08_COBLONG_HMAC_SECRET_2026"
-	defaultPoolIDR  = int64(8500000)
-	localStateFile  = ".civicledger-go-state.json"
+	genesisHash    = "0000000000000000000000000000000000000000000000000000000000000000"
+	defaultSecret  = "CIVICLEDGER_RT04_RW08_COBLONG_HMAC_SECRET_2026"
+	defaultPoolIDR = int64(8500000)
+	localStateFile = ".civicledger-go-state.json"
 )
 
 // ==================== DOMAIN MODELS ====================
@@ -146,26 +146,26 @@ type ClearinghouseState struct {
 var commodityCatalog = []CommodityItem{
 	{
 		Code:       "PKG-BERAS-5KG",
-		Name:       "Paket Beras Lokal Medium (5 Kg)",
-		Items:      "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
+		Name:       "Paket Beras 5 Kg",
+		Items:      "Beras 5 kg (khusus sembako, tidak bisa diuangkan)",
 		NominalIDR: 72500,
 	},
 	{
 		Code:       "PKG-PROTEIN-01",
-		Name:       "Paket Gizi & Protein Keluarga",
-		Items:      "Telur Ayam 1 Kg + Tempe 2 Papan + Tahu 10 Potong",
+		Name:       "Paket Telur & Lauk",
+		Items:      "Telur ayam 1 kg, tempe 2 papan, tahu 10 potong",
 		NominalIDR: 42000,
 	},
 	{
 		Code:       "PKG-DAPUR-02",
-		Name:       "Paket Minyak Goreng & Pokok Dapur",
-		Items:      "Minyak Goreng 2 Liter + Gula Pasir 1 Kg + Garam Beryodium",
+		Name:       "Paket Minyak & Gula",
+		Items:      "Minyak goreng 2 liter, gula pasir 1 kg, garam",
 		NominalIDR: 51000,
 	},
 	{
 		Code:       "PKG-DARURAT-FULL",
-		Name:       "Paket Sembako Darurat Lengkap",
-		Items:      "Beras 5 Kg + Telur 1 Kg + Minyak Goreng 1L + Susu Anak",
+		Name:       "Paket Sembako Lengkap",
+		Items:      "Beras 5 kg, telur 1 kg, minyak goreng 1 liter, susu",
 		NominalIDR: 115000,
 	},
 }
@@ -253,7 +253,7 @@ func verifyLedgerChain(entries []LedgerEntry) ChainVerificationResult {
 				CheckedCount: len(entries) - i,
 				HeadHash:     entries[0].TxHash,
 				BrokenAtID:   e.ID,
-				Message:      fmt.Sprintf("Terdeteksi manipulasi payload buku besar pada transaksi %s.", e.ID),
+				Message:      fmt.Sprintf("Ditemukan perubahan data tidak sah pada catatan %s.", e.ID),
 			}
 		}
 		expectedPrev = e.TxHash
@@ -263,7 +263,7 @@ func verifyLedgerChain(entries []LedgerEntry) ChainVerificationResult {
 		Valid:        true,
 		CheckedCount: len(entries),
 		HeadHash:     entries[0].TxHash,
-		Message:      fmt.Sprintf("Seluruh %d entri buku besar terverifikasi utuh terhadap rantai hash SHA-256.", len(entries)),
+		Message:      fmt.Sprintf("Hasil cek aman. Seluruh %d transaksi sesuai dan belum pernah diubah.", len(entries)),
 	}
 }
 
@@ -274,212 +274,167 @@ func buildInitialSeedState(engine string) *ClearinghouseState {
 	issuedIso := now.Add(-3 * time.Hour).Format(time.RFC3339)
 	expIso := now.Add(69 * time.Hour).Format(time.RFC3339)
 	earlierRedeemedIso := now.Add(-5 * time.Hour).Format(time.RFC3339)
+	secondRedeemedIso := now.Add(-4 * time.Hour).Format(time.RFC3339)
 	settledIso := now.Add(-24 * time.Hour).Format(time.RFC3339)
 
 	beneficiaries := []Beneficiary{
-		{
-			ID:            "WGA-0401",
-			Name:          "Ibu Siti Aminah (Lansia)",
-			RtRw:          "RT 04 / RW 08 Coblong, Bandung",
-			Category:      "Keluarga Lansia Rentan",
-			Phone:         "0812-2104-8891 (SMS / Kode Cetak)",
-			HouseholdSize: 2,
-			VerifiedBy:    "Koordinator RT 04 — Pak H. Dedi",
-		},
-		{
-			ID:            "WGA-0402",
-			Name:          "Keluarga Pak Deden Suryana",
-			RtRw:          "RT 04 / RW 08 Coblong, Bandung",
-			Category:      "Pekerja Harian Lepas Terdampak",
-			Phone:         "0857-9412-3302 (QR Web Ponsel)",
-			HouseholdSize: 4,
-			VerifiedBy:    "Koordinator RT 04 — Pak H. Dedi",
-		},
-		{
-			ID:            "WGA-0403",
-			Name:          "Ibu Rina Kartika",
-			RtRw:          "RT 02 / RW 08 Coblong, Bandung",
-			Category:      "Kepala Keluarga Perempuan",
-			Phone:         "0813-2289-7104 (QR Web Ponsel)",
-			HouseholdSize: 3,
-			VerifiedBy:    "Relawan Posyandu RW 08",
-		},
-		{
-			ID:            "WGA-0404",
-			Name:          "Pak Maman Abdurrahman",
-			RtRw:          "RT 05 / RW 08 Coblong, Bandung",
-			Category:      "Pemulihan Medis & Rentan",
-			Phone:         "0896-5541-0029 (SMS / Kode Cetak)",
-			HouseholdSize: 3,
-			VerifiedBy:    "Ketua RW 08 — Ir. Bambang",
-		},
+		{ID: "WGA-0401", Name: "Op. Rina Br. Napitupulu", RtRw: "Desa Sitoluama, Laguboti", Category: "Lansia", Phone: "0812-6311-4401", HouseholdSize: 2, VerifiedBy: "St. Darwin Pasaribu"},
+		{ID: "WGA-0402", Name: "Maruli Siahaan", RtRw: "Desa Tambunan, Balige", Category: "Petani Sawah", Phone: "0852-7019-2812", HouseholdSize: 4, VerifiedBy: "St. Darwin Pasaribu"},
+		{ID: "WGA-0403", Name: "Tiurma Br. Simanjuntak", RtRw: "Kel. Sangkar Nihuta, Balige", Category: "Ibu Rumah Tangga", Phone: "0813-7540-9103", HouseholdSize: 3, VerifiedBy: "Kader Desa Balige"},
+		{ID: "WGA-0404", Name: "Hotman Hutagaol", RtRw: "Desa Sibuea, Laguboti", Category: "Pekerja Harian", Phone: "0821-6704-3314", HouseholdSize: 5, VerifiedBy: "St. Darwin Pasaribu"},
+		{ID: "WGA-0405", Name: "Rosmawati Br. Tampubolon", RtRw: "Desa Tampahan, Kec. Tampahan", Category: "Keluarga Kurang Mampu", Phone: "0853-6120-5505", HouseholdSize: 4, VerifiedBy: "Perangkat Desa Tampahan"},
+		{ID: "WGA-0406", Name: "Parlindungan Pardede", RtRw: "Desa Lumban Pea, Balige", Category: "Nelayan Danau Toba", Phone: "0812-6482-7706", HouseholdSize: 5, VerifiedBy: "Kader Desa Lumban Pea"},
+		{ID: "WGA-0407", Name: "Op. Doli Manurung", RtRw: "Desa Patane II, Porsea", Category: "Lansia", Phone: "0813-6209-1807", HouseholdSize: 2, VerifiedBy: "Perangkat Desa Patane"},
+		{ID: "WGA-0408", Name: "Nurhayati Br. Sibarani", RtRw: "Desa Sibarani Nasampulu, Laguboti", Category: "Kepala Keluarga Tunggal", Phone: "0852-9614-6408", HouseholdSize: 3, VerifiedBy: "St. Darwin Pasaribu"},
+		{ID: "WGA-0409", Name: "Tumpal Sitorus", RtRw: "Desa Parparean, Porsea", Category: "Buruh Tani", Phone: "0822-7410-2909", HouseholdSize: 4, VerifiedBy: "Perangkat Desa Parparean"},
+		{ID: "WGA-0410", Name: "Murniati Br. Pangaribuan", RtRw: "Desa Sigumpar Dangsina, Sigumpar", Category: "Keluarga Kurang Mampu", Phone: "0812-6533-8110", HouseholdSize: 4, VerifiedBy: "Kader Desa Sigumpar"},
+		{ID: "WGA-0411", Name: "Bistok Panjaitan", RtRw: "Desa Narumonda I, Siantar Narumonda", Category: "Tukang Bangunan", Phone: "0853-7201-4911", HouseholdSize: 5, VerifiedBy: "Perangkat Desa Narumonda"},
+		{ID: "WGA-0412", Name: "Sondang Br. Tambunan", RtRw: "Desa Lumban Gorat, Balige", Category: "Ibu Rumah Tangga", Phone: "0813-7088-5212", HouseholdSize: 3, VerifiedBy: "Kader Desa Balige"},
+		{ID: "WGA-0413", Name: "Mangatur Sinaga", RtRw: "Desa Haunatas, Laguboti", Category: "Petani Jagung", Phone: "0821-6511-9013", HouseholdSize: 4, VerifiedBy: "St. Darwin Pasaribu"},
+		{ID: "WGA-0414", Name: "Lasma Br. Silalahi", RtRw: "Desa Soposurung, Balige", Category: "Penjahit Rumahan", Phone: "0852-6190-3714", HouseholdSize: 3, VerifiedBy: "Kader Desa Balige"},
+		{ID: "WGA-0415", Name: "Sahat Marpaung", RtRw: "Desa Silaen, Kec. Silaen", Category: "Buruh Tani", Phone: "0812-6904-1115", HouseholdSize: 5, VerifiedBy: "Perangkat Desa Silaen"},
+		{ID: "WGA-0416", Name: "Op. Tiur Br. Hutapea", RtRw: "Desa Pintubosi, Laguboti", Category: "Lansia", Phone: "0813-6155-6816", HouseholdSize: 2, VerifiedBy: "St. Darwin Pasaribu"},
+		{ID: "WGA-0417", Name: "Jannes Sirait", RtRw: "Desa Lumban Binanga, Uluan", Category: "Petani Kopi", Phone: "0822-7731-4217", HouseholdSize: 4, VerifiedBy: "Perangkat Desa Uluan"},
+		{ID: "WGA-0418", Name: "Roida Br. Lubis", RtRw: "Kel. Napitupulu Bagasan, Balige", Category: "Keluarga Kurang Mampu", Phone: "0853-6082-7318", HouseholdSize: 4, VerifiedBy: "Kader Desa Balige"},
+		{ID: "WGA-0419", Name: "Poltak Nainggolan", RtRw: "Desa Lumban Dolok, Balige", Category: "Pekerja Harian", Phone: "0812-6049-8519", HouseholdSize: 3, VerifiedBy: "Kader Desa Balige"},
+		{ID: "WGA-0420", Name: "Masniari Br. Aritonang", RtRw: "Desa Silamosik, Porsea", Category: "Kepala Keluarga Tunggal", Phone: "0813-7612-2620", HouseholdSize: 3, VerifiedBy: "Perangkat Desa Porsea"},
 	}
 
 	merchants := []Merchant{
 		{
 			ID:                  "WRG-01",
-			Name:                "Warung Kelontong Berkah Bu Yati",
-			Owner:               "Ibu Yati Rohayati",
-			RtRw:                "RT 04 / RW 08 (Gg. Sangkuriang Dalam)",
-			BankAccount:         "BRI Simpedes / QRIS •• 4821",
+			Name:                "Kedai Sembako Inang Boru Sihombing",
+			Owner:               "Marta Br. Sihombing",
+			RtRw:                "Jl. Patuan Nagari, Balige",
+			BankAccount:         "BRI / QRIS •• 4821",
 			UnsettledBalanceIDR: 72500,
 			TotalSettledIDR:     480000,
 			RedemptionCount:     5,
 		},
 		{
 			ID:                  "WRG-02",
-			Name:                "Toko Sembako Pak Asep Mandiri",
-			Owner:               "Pak Asep Sunandar",
-			RtRw:                "RT 02 / RW 08 (Jl. Cisitu Lama)",
-			BankAccount:         "Bank BJB Mikro / QRIS •• 9012",
+			Name:                "Toko Pangan Pak Binsar",
+			Owner:               "Binsar Hutabarat",
+			RtRw:                "Pasar Laguboti, Toba",
+			BankAccount:         "Bank Sumut / QRIS •• 9012",
 			UnsettledBalanceIDR: 51000,
 			TotalSettledIDR:     350000,
 			RedemptionCount:     4,
 		},
 		{
 			ID:                  "WRG-03",
-			Name:                "Warung Sayur & Pangan Teh Euis",
-			Owner:               "Teh Euis Komariah",
-			RtRw:                "RT 05 / RW 08 (Gg. Dago Pojok)",
-			BankAccount:         "Mandiri Mikro / GoPay Merchant •• 3319",
+			Name:                "Kedai Harian Op. Ester",
+			Owner:               "Ester Br. Siahaan",
+			RtRw:                "Desa Sitoluama, Laguboti",
+			BankAccount:         "BRI Mikro •• 3319",
 			UnsettledBalanceIDR: 0,
 			TotalSettledIDR:     290000,
 			RedemptionCount:     3,
+		},
+		{
+			ID:                  "WRG-04",
+			Name:                "Warung Beras Porsea Jaya",
+			Owner:               "Togar Butarbutar",
+			RtRw:                "Jl. Sisingamangaraja, Porsea",
+			BankAccount:         "Bank Sumut / QRIS •• 7140",
+			UnsettledBalanceIDR: 0,
+			TotalSettledIDR:     215000,
+			RedemptionCount:     2,
 		},
 	}
 
 	v1Sig := signVoucherHMAC("VCH-2026-8841", "WGA-0401", "PKG-BERAS-5KG", 72500, "n9f81a2b4c6d", expIso)
 	v2Sig := signVoucherHMAC("VCH-2026-7732", "WGA-0402", "PKG-DARURAT-FULL", 115000, "a3c5e7f91b2d", expIso)
 	v3Sig := signVoucherHMAC("VCH-2026-6619", "WGA-0403", "PKG-PROTEIN-01", 42000, "d4e8f1a09c3b", expIso)
-	v4Sig := signVoucherHMAC("VCH-2026-5508", "WGA-0404", "PKG-BERAS-5KG", 72500, "b7c2d9e41f8a", expIso)
+	v4Sig := signVoucherHMAC("VCH-2026-4420", "WGA-0405", "PKG-DAPUR-02", 51000, "c1a9f4b28e0d", expIso)
+	v5Sig := signVoucherHMAC("VCH-2026-3318", "WGA-0406", "PKG-BERAS-5KG", 72500, "e8b2c4d71a5f", expIso)
+	v6Sig := signVoucherHMAC("VCH-2026-2195", "WGA-0407", "PKG-DARURAT-FULL", 115000, "f2d7a9c14b6e", expIso)
+	v7Sig := signVoucherHMAC("VCH-2026-5508", "WGA-0404", "PKG-BERAS-5KG", 72500, "b7c2d9e41f8a", expIso)
+	v8Sig := signVoucherHMAC("VCH-2026-5102", "WGA-0408", "PKG-DAPUR-02", 51000, "91e4a7c32d8b", expIso)
 
 	m1ID := "WRG-01"
-	m1Name := "Warung Kelontong Berkah Bu Yati"
+	m1Name := "Kedai Sembako Inang Boru Sihombing"
+	m2ID := "WRG-02"
+	m2Name := "Toko Pangan Pak Binsar"
 
 	vouchers := []Voucher{
 		{
-			ID:              "VCH-2026-8841",
-			ShortCode:       "CL-8841-K9",
-			BeneficiaryID:   "WGA-0401",
-			BeneficiaryName: "Ibu Siti Aminah (Lansia)",
-			RtRw:            "RT 04 / RW 08 Coblong, Bandung",
-			CommodityCode:   "PKG-BERAS-5KG",
-			CommodityName:   "Paket Beras Lokal Medium (5 Kg)",
-			CommodityItems:  "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
-			NominalIDR:      72500,
-			Nonce:           "n9f81a2b4c6d",
-			IssuedAt:        issuedIso,
-			ExpiresAt:       expIso,
-			HMACSignature:   v1Sig,
-			Status:          "ACTIVE",
+			ID: "VCH-2026-8841", ShortCode: "CL-8841-K9", BeneficiaryID: "WGA-0401", BeneficiaryName: "Op. Rina Br. Napitupulu", RtRw: "Desa Sitoluama, Laguboti",
+			CommodityCode: "PKG-BERAS-5KG", CommodityName: "Paket Beras 5 Kg", CommodityItems: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)", NominalIDR: 72500,
+			Nonce: "n9f81a2b4c6d", IssuedAt: issuedIso, ExpiresAt: expIso, HMACSignature: v1Sig, Status: "ACTIVE",
 		},
 		{
-			ID:              "VCH-2026-7732",
-			ShortCode:       "CL-7732-M4",
-			BeneficiaryID:   "WGA-0402",
-			BeneficiaryName: "Keluarga Pak Deden Suryana",
-			RtRw:            "RT 04 / RW 08 Coblong, Bandung",
-			CommodityCode:   "PKG-DARURAT-FULL",
-			CommodityName:   "Paket Sembako Darurat Lengkap",
-			CommodityItems:  "Beras 5 Kg + Telur 1 Kg + Minyak Goreng 1L + Susu Anak",
-			NominalIDR:      115000,
-			Nonce:           "a3c5e7f91b2d",
-			IssuedAt:        issuedIso,
-			ExpiresAt:       expIso,
-			HMACSignature:   v2Sig,
-			Status:          "ACTIVE",
+			ID: "VCH-2026-7732", ShortCode: "CL-7732-M4", BeneficiaryID: "WGA-0402", BeneficiaryName: "Maruli Siahaan", RtRw: "Desa Tambunan, Balige",
+			CommodityCode: "PKG-DARURAT-FULL", CommodityName: "Paket Sembako Lengkap", CommodityItems: "Beras 5 kg, telur 1 kg, minyak goreng 1 liter, susu", NominalIDR: 115000,
+			Nonce: "a3c5e7f91b2d", IssuedAt: issuedIso, ExpiresAt: expIso, HMACSignature: v2Sig, Status: "ACTIVE",
 		},
 		{
-			ID:              "VCH-2026-6619",
-			ShortCode:       "CL-6619-P2",
-			BeneficiaryID:   "WGA-0403",
-			BeneficiaryName: "Ibu Rina Kartika",
-			RtRw:            "RT 02 / RW 08 Coblong, Bandung",
-			CommodityCode:   "PKG-PROTEIN-01",
-			CommodityName:   "Paket Gizi & Protein Keluarga",
-			CommodityItems:  "Telur Ayam 1 Kg + Tempe 2 Papan + Tahu 10 Potong",
-			NominalIDR:      42000,
-			Nonce:           "d4e8f1a09c3b",
-			IssuedAt:        issuedIso,
-			ExpiresAt:       expIso,
-			HMACSignature:   v3Sig,
-			Status:          "ACTIVE",
+			ID: "VCH-2026-6619", ShortCode: "CL-6619-P2", BeneficiaryID: "WGA-0403", BeneficiaryName: "Tiurma Br. Simanjuntak", RtRw: "Kel. Sangkar Nihuta, Balige",
+			CommodityCode: "PKG-PROTEIN-01", CommodityName: "Paket Telur & Lauk", CommodityItems: "Telur ayam 1 kg, tempe 2 papan, tahu 10 potong", NominalIDR: 42000,
+			Nonce: "d4e8f1a09c3b", IssuedAt: issuedIso, ExpiresAt: expIso, HMACSignature: v3Sig, Status: "ACTIVE",
 		},
 		{
-			ID:                     "VCH-2026-5508",
-			ShortCode:              "CL-5508-R7",
-			BeneficiaryID:          "WGA-0404",
-			BeneficiaryName:        "Pak Maman Abdurrahman",
-			RtRw:                   "RT 05 / RW 08 Coblong, Bandung",
-			CommodityCode:          "PKG-BERAS-5KG",
-			CommodityName:          "Paket Beras Lokal Medium (5 Kg)",
-			CommodityItems:         "Beras Medium 5 Kg (Khusus Pangan, Non-Tunai)",
-			NominalIDR:             72500,
-			Nonce:                  "b7c2d9e41f8a",
-			IssuedAt:               earlierRedeemedIso,
-			ExpiresAt:              expIso,
-			HMACSignature:          v4Sig,
-			Status:                 "REDEEMED",
-			RedeemedByMerchantID:   &m1ID,
-			RedeemedByMerchantName: &m1Name,
-			RedeemedAt:             &earlierRedeemedIso,
+			ID: "VCH-2026-4420", ShortCode: "CL-4420-T5", BeneficiaryID: "WGA-0405", BeneficiaryName: "Rosmawati Br. Tampubolon", RtRw: "Desa Tampahan, Kec. Tampahan",
+			CommodityCode: "PKG-DAPUR-02", CommodityName: "Paket Minyak & Gula", CommodityItems: "Minyak goreng 2 liter, gula pasir 1 kg, garam", NominalIDR: 51000,
+			Nonce: "c1a9f4b28e0d", IssuedAt: issuedIso, ExpiresAt: expIso, HMACSignature: v4Sig, Status: "ACTIVE",
+		},
+		{
+			ID: "VCH-2026-3318", ShortCode: "CL-3318-B8", BeneficiaryID: "WGA-0406", BeneficiaryName: "Parlindungan Pardede", RtRw: "Desa Lumban Pea, Balige",
+			CommodityCode: "PKG-BERAS-5KG", CommodityName: "Paket Beras 5 Kg", CommodityItems: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)", NominalIDR: 72500,
+			Nonce: "e8b2c4d71a5f", IssuedAt: issuedIso, ExpiresAt: expIso, HMACSignature: v5Sig, Status: "ACTIVE",
+		},
+		{
+			ID: "VCH-2026-2195", ShortCode: "CL-2195-N3", BeneficiaryID: "WGA-0407", BeneficiaryName: "Op. Doli Manurung", RtRw: "Desa Patane II, Porsea",
+			CommodityCode: "PKG-DARURAT-FULL", CommodityName: "Paket Sembako Lengkap", CommodityItems: "Beras 5 kg, telur 1 kg, minyak goreng 1 liter, susu", NominalIDR: 115000,
+			Nonce: "f2d7a9c14b6e", IssuedAt: issuedIso, ExpiresAt: expIso, HMACSignature: v6Sig, Status: "ACTIVE",
+		},
+		{
+			ID: "VCH-2026-5508", ShortCode: "CL-5508-R7", BeneficiaryID: "WGA-0404", BeneficiaryName: "Hotman Hutagaol", RtRw: "Desa Sibuea, Laguboti",
+			CommodityCode: "PKG-BERAS-5KG", CommodityName: "Paket Beras 5 Kg", CommodityItems: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)", NominalIDR: 72500,
+			Nonce: "b7c2d9e41f8a", IssuedAt: earlierRedeemedIso, ExpiresAt: expIso, HMACSignature: v7Sig, Status: "REDEEMED",
+			RedeemedByMerchantID: &m1ID, RedeemedByMerchantName: &m1Name, RedeemedAt: &earlierRedeemedIso,
+		},
+		{
+			ID: "VCH-2026-5102", ShortCode: "CL-5102-S4", BeneficiaryID: "WGA-0408", BeneficiaryName: "Nurhayati Br. Sibarani", RtRw: "Desa Sibarani Nasampulu, Laguboti",
+			CommodityCode: "PKG-DAPUR-02", CommodityName: "Paket Minyak & Gula", CommodityItems: "Minyak goreng 2 liter, gula pasir 1 kg, garam", NominalIDR: 51000,
+			Nonce: "91e4a7c32d8b", IssuedAt: secondRedeemedIso, ExpiresAt: expIso, HMACSignature: v8Sig, Status: "REDEEMED",
+			RedeemedByMerchantID: &m2ID, RedeemedByMerchantName: &m2Name, RedeemedAt: &secondRedeemedIso,
 		},
 	}
 
-	tx1Hash := computeLedgerTxHash(genesisHash, "VCH-2026-5508", "WRG-01", 72500, earlierRedeemedIso, v4Sig)
+	tx1Hash := computeLedgerTxHash(genesisHash, "VCH-2026-5508", "WRG-01", 72500, earlierRedeemedIso, v7Sig)
+	tx2Hash := computeLedgerTxHash(tx1Hash, "VCH-2026-5102", "WRG-02", 51000, secondRedeemedIso, v8Sig)
 	ledger := []LedgerEntry{
 		{
-			ID:            "TX-9F2A10C4",
-			ClientTxID:    "CTX-SEED-5508",
-			VoucherID:     "VCH-2026-5508",
-			ShortCode:     "CL-5508-R7",
-			BeneficiaryID: "WGA-0404",
-			MerchantID:    "WRG-01",
-			MerchantName:  "Warung Kelontong Berkah Bu Yati",
-			CommodityName: "Paket Beras Lokal Medium (5 Kg)",
-			NominalIDR:    72500,
-			HMACSignature: v4Sig,
-			PrevHash:      genesisHash,
-			TxHash:        tx1Hash,
-			SyncMode:      "OFFLINE_BATCH_SYNC",
-			Timestamp:     earlierRedeemedIso,
+			ID: "TX-4B8E21D9", ClientTxID: "CTX-SEED-5102", VoucherID: "VCH-2026-5102", ShortCode: "CL-5102-S4", BeneficiaryID: "WGA-0408",
+			MerchantID: "WRG-02", MerchantName: "Toko Pangan Pak Binsar", CommodityName: "Paket Minyak & Gula", NominalIDR: 51000,
+			HMACSignature: v8Sig, PrevHash: tx1Hash, TxHash: tx2Hash, SyncMode: "ONLINE", Timestamp: secondRedeemedIso,
+		},
+		{
+			ID: "TX-9F2A10C4", ClientTxID: "CTX-SEED-5508", VoucherID: "VCH-2026-5508", ShortCode: "CL-5508-R7", BeneficiaryID: "WGA-0404",
+			MerchantID: "WRG-01", MerchantName: "Kedai Sembako Inang Boru Sihombing", CommodityName: "Paket Beras 5 Kg", NominalIDR: 72500,
+			HMACSignature: v7Sig, PrevHash: genesisHash, TxHash: tx1Hash, SyncMode: "OFFLINE_BATCH_SYNC", Timestamp: earlierRedeemedIso,
 		},
 	}
 
 	settlementBatches := []SettlementBatch{
 		{
-			ID:             "STL-2026-A81F09",
-			MerchantID:     "WRG-01",
-			MerchantName:   "Warung Kelontong Berkah Bu Yati",
-			BankAccount:    "BRI Simpedes / QRIS •• 4821",
-			VoucherCount:   4,
-			TotalAmountIDR: 480000,
-			BatchHash:      computeSHA256Hex("STL-2026-A81F09|WRG-01|480000"),
-			SettledAt:      settledIso,
+			ID: "STL-2026-A81F09", MerchantID: "WRG-01", MerchantName: "Kedai Sembako Inang Boru Sihombing",
+			BankAccount: "BRI / QRIS •• 4821", VoucherCount: 4, TotalAmountIDR: 480000,
+			BatchHash: computeSHA256Hex("STL-2026-A81F09|WRG-01|480000"), SettledAt: settledIso,
 		},
 		{
-			ID:             "STL-2026-B42C11",
-			MerchantID:     "WRG-02",
-			MerchantName:   "Toko Sembako Pak Asep Mandiri",
-			BankAccount:    "Bank BJB Mikro / QRIS •• 9012",
-			VoucherCount:   3,
-			TotalAmountIDR: 350000,
-			BatchHash:      computeSHA256Hex("STL-2026-B42C11|WRG-02|350000"),
-			SettledAt:      settledIso,
+			ID: "STL-2026-B42C11", MerchantID: "WRG-02", MerchantName: "Toko Pangan Pak Binsar",
+			BankAccount: "Bank Sumut / QRIS •• 9012", VoucherCount: 3, TotalAmountIDR: 350000,
+			BatchHash: computeSHA256Hex("STL-2026-B42C11|WRG-02|350000"), SettledAt: settledIso,
 		},
 	}
 
 	reconciliationLogs := []ReconciliationLog{
 		{
-			ID:           "REC-SEED-001",
-			ClientTxID:   "CTX-SEED-5508",
-			VoucherID:    "VCH-2026-5508",
-			ShortCode:    "CL-5508-R7",
-			MerchantID:   "WRG-01",
-			MerchantName: "Warung Kelontong Berkah Bu Yati",
-			Outcome:      "SYNCED",
-			Reason:       "Penukaran offline terverifikasi melalui HMAC-SHA256 dan dicatat ke buku besar rantai hash.",
-			ProcessedAt:  earlierRedeemedIso,
+			ID: "REC-SEED-001", ClientTxID: "CTX-SEED-5508", VoucherID: "VCH-2026-5508", ShortCode: "CL-5508-R7",
+			MerchantID: "WRG-01", MerchantName: "Kedai Sembako Inang Boru Sihombing", Outcome: "SYNCED",
+			Reason: "Transaksi offline sudah dicek dan masuk ke catatan pusat.", ProcessedAt: earlierRedeemedIso,
 		},
 	}
 
@@ -569,7 +524,7 @@ func (s *ClearinghouseService) loadFromFile() *ClearinghouseState {
 	if s.statePath != "" {
 		if raw, err := os.ReadFile(s.statePath); err == nil {
 			var st ClearinghouseState
-			if jsonErr := json.Unmarshal(raw, &st); jsonErr == nil && len(st.Beneficiaries) > 0 {
+			if jsonErr := json.Unmarshal(raw, &st); jsonErr == nil && len(st.Beneficiaries) >= 20 {
 				st.CommodityCatalog = commodityCatalog
 				st.BackendEngine = s.engine
 				return &st
@@ -804,20 +759,20 @@ func (s *ClearinghouseService) AddBeneficiary(in AddBeneficiaryInput) (Beneficia
 		in.HouseholdSize = 3
 	}
 	if strings.TrimSpace(in.Category) == "" {
-		in.Category = "Verified Vulnerable Household"
+		in.Category = "Keluarga Kurang Mampu"
 	}
 	if strings.TrimSpace(in.Phone) == "" {
-		in.Phone = "0812-0000-1111 (SMS / Mobile Web)"
+		in.Phone = "0812-6300-0000"
 	}
 
 	ben := Beneficiary{
-		ID:            fmt.Sprintf("WGA-04%02d", len(s.state.Beneficiaries)+10),
+		ID:            fmt.Sprintf("WGA-04%02d", len(s.state.Beneficiaries)+1),
 		Name:          name,
 		RtRw:          rtRw,
 		Category:      strings.TrimSpace(in.Category),
 		Phone:         strings.TrimSpace(in.Phone),
 		HouseholdSize: in.HouseholdSize,
-		VerifiedBy:    "RT 04 Coordinator — Pak H. Dedi",
+		VerifiedBy:    "St. Darwin Pasaribu",
 	}
 	s.state.Beneficiaries = append(s.state.Beneficiaries, ben)
 	s.persistLocked()
@@ -838,13 +793,13 @@ func (s *ClearinghouseService) AddMerchant(in AddMerchantInput) (Merchant, Clear
 	name := strings.TrimSpace(in.Name)
 	owner := strings.TrimSpace(in.Owner)
 	if name == "" || owner == "" {
-		return Merchant{}, ClearinghouseState{}, errors.New("merchant stall name and owner are required")
+		return Merchant{}, ClearinghouseState{}, errors.New("nama kedai dan pemilik wajib diisi")
 	}
 	if strings.TrimSpace(in.RtRw) == "" {
-		in.RtRw = "RT 04 / RW 08 Coblong, Bandung"
+		in.RtRw = "Laguboti, Kab. Toba"
 	}
 	if strings.TrimSpace(in.BankAccount) == "" {
-		in.BankAccount = "QRIS Micro Merchant •• 0000"
+		in.BankAccount = "BRI / QRIS •• 0000"
 	}
 
 	m := Merchant{
@@ -958,7 +913,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 			return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 				Code:    http.StatusConflict,
 				Outcome: "DUPLICATE_CONFLICT",
-				Message: fmt.Sprintf("Duplicate transaction identifier %s already committed in ledger.", clientTxID),
+				Message: fmt.Sprintf("Catatan transaksi %s sudah pernah diproses sebelumnya.", clientTxID),
 			}
 		}
 	}
@@ -976,7 +931,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusNotFound,
 			Outcome: "NOT_FOUND",
-			Message: "Voucher not found in clearinghouse registry.",
+			Message: "Kode kupon tidak ditemukan di daftar bantuan.",
 		}
 	}
 
@@ -991,7 +946,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusNotFound,
 			Outcome: "NOT_FOUND",
-			Message: "Participating merchant not found.",
+			Message: "Warung mitra tidak ditemukan.",
 		}
 	}
 
@@ -1007,7 +962,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusConflict,
 			Outcome: "DUPLICATE_CONFLICT",
-			Message: fmt.Sprintf("Ditolak (Anti-Double-Spend): Voucher %s sudah berstatus %s (telah ditukar di %s).", v.ShortCode, v.Status, prevMerchant),
+			Message: fmt.Sprintf("Kupon %s ditolak karena sudah pernah dipakai sebelumnya di %s.", v.ShortCode, prevMerchant),
 		}
 	}
 
@@ -1016,7 +971,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusGone,
 			Outcome: "EXPIRED",
-			Message: fmt.Sprintf("Voucher %s sudah kedaluwarsa.", v.ShortCode),
+			Message: fmt.Sprintf("Kupon %s sudah melewati batas waktu penukarannya.", v.ShortCode),
 		}
 	}
 
@@ -1026,7 +981,7 @@ func (s *ClearinghouseService) redeemLocked(in RedeemVoucherInput) (Voucher, Led
 		return Voucher{}, LedgerEntry{}, Merchant{}, &RedeemError{
 			Code:    http.StatusForbidden,
 			Outcome: "INVALID_SIGNATURE",
-			Message: "Verifikasi kriptografi gagal: tanda tangan HMAC-SHA256 tidak cocok (indikasi manipulasi payload).",
+			Message: "Kupon ditolak karena kode pengamannya tidak cocok (indikasi kupon palsu atau diubah).",
 		}
 	}
 
@@ -1179,7 +1134,7 @@ func (s *ClearinghouseService) BatchSync(items []BatchSyncItem) ([]BatchSyncResu
 			MerchantID:   m.ID,
 			MerchantName: m.Name,
 			Outcome:      "SYNCED",
-			Reason:       "Transaksi offline divalidasi oleh server Golang dan dicatat ke buku besar rantai hash.",
+			Reason:       "Penukaran dari mode offline sudah dicek keasliannya oleh server dan berhasil masuk ke catatan pusat.",
 			ProcessedAt:  nowIso,
 		}
 		s.state.ReconciliationLogs = append([]ReconciliationLog{recLog}, s.state.ReconciliationLogs...)

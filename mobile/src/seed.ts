@@ -1,0 +1,345 @@
+import {
+  Beneficiary,
+  CommodityItem,
+  LedgerEntry,
+  LocalAccountRecord,
+  Merchant,
+  MobileClearinghouseState,
+  Voucher,
+} from "./types";
+import { GENESIS_HASH, sha256Hex, signVoucherOffline } from "./crypto";
+
+export const DEFAULT_COMMODITIES: CommodityItem[] = [
+  {
+    code: "PKG-BERAS-5KG",
+    name: "Paket Beras 5 Kg",
+    items: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)",
+    nominal_idr: 72500,
+  },
+  {
+    code: "PKG-PROTEIN-01",
+    name: "Paket Telur & Lauk",
+    items: "Telur ayam 1 kg, tempe 2 papan, tahu 10 potong",
+    nominal_idr: 42000,
+  },
+  {
+    code: "PKG-DAPUR-02",
+    name: "Paket Minyak & Gula",
+    items: "Minyak goreng 2 liter, gula pasir 1 kg, garam",
+    nominal_idr: 51000,
+  },
+  {
+    code: "PKG-DARURAT-FULL",
+    name: "Paket Sembako Lengkap",
+    items: "Beras 5 kg, telur 1 kg, minyak goreng 1 liter, susu",
+    nominal_idr: 115000,
+  },
+];
+
+export const DEFAULT_ACCOUNTS: LocalAccountRecord[] = [
+  {
+    id: "USR-WARGA-01",
+    name: "Op. Rina Br. Napitupulu",
+    email: "warga@toba.id",
+    phone: "0812-6311-4401",
+    role: "BENEFICIARY",
+    role_label: "Warga Penerima",
+    rt_rw: "Desa Sitoluama, Laguboti",
+    linked_beneficiary_id: "WGA-0401",
+    password: "warga2026",
+  },
+  {
+    id: "USR-WARGA-02",
+    name: "Maruli Siahaan",
+    email: "maruli@toba.id",
+    phone: "0852-7019-2812",
+    role: "BENEFICIARY",
+    role_label: "Warga Penerima",
+    rt_rw: "Desa Tambunan, Balige",
+    linked_beneficiary_id: "WGA-0402",
+    password: "warga2026",
+  },
+  {
+    id: "USR-WARGA-03",
+    name: "Tiurma Br. Simanjuntak",
+    email: "tiurma@toba.id",
+    phone: "0813-7540-9103",
+    role: "BENEFICIARY",
+    role_label: "Warga Penerima",
+    rt_rw: "Kel. Sangkar Nihuta, Balige",
+    linked_beneficiary_id: "WGA-0403",
+    password: "warga2026",
+  },
+];
+
+export const SEED_BENEFICIARIES: Beneficiary[] = [
+  { id: "WGA-0401", name: "Op. Rina Br. Napitupulu", rt_rw: "Desa Sitoluama, Laguboti", category: "Lansia", phone: "0812-6311-4401", household_size: 2, verified_by: "St. Darwin Pasaribu" },
+  { id: "WGA-0402", name: "Maruli Siahaan", rt_rw: "Desa Tambunan, Balige", category: "Petani Sawah", phone: "0852-7019-2812", household_size: 4, verified_by: "St. Darwin Pasaribu" },
+  { id: "WGA-0403", name: "Tiurma Br. Simanjuntak", rt_rw: "Kel. Sangkar Nihuta, Balige", category: "Ibu Rumah Tangga", phone: "0813-7540-9103", household_size: 3, verified_by: "Kader Desa Balige" },
+  { id: "WGA-0404", name: "Hotman Hutagaol", rt_rw: "Desa Sibuea, Laguboti", category: "Pekerja Harian", phone: "0821-6704-3314", household_size: 5, verified_by: "St. Darwin Pasaribu" },
+  { id: "WGA-0405", name: "Rosmawati Br. Tampubolon", rt_rw: "Desa Tampahan, Kec. Tampahan", category: "Keluarga Kurang Mampu", phone: "0853-6120-5505", household_size: 4, verified_by: "Perangkat Desa Tampahan" },
+  { id: "WGA-0406", name: "Parlindungan Pardede", rt_rw: "Desa Lumban Pea, Balige", category: "Nelayan Danau Toba", phone: "0812-6482-7706", household_size: 5, verified_by: "Kader Desa Lumban Pea" },
+  { id: "WGA-0407", name: "Op. Doli Manurung", rt_rw: "Desa Patane II, Porsea", category: "Lansia", phone: "0813-6209-1807", household_size: 2, verified_by: "Perangkat Desa Patane" },
+  { id: "WGA-0408", name: "Nurhayati Br. Sibarani", rt_rw: "Desa Sibarani Nasampulu, Laguboti", category: "Kepala Keluarga Tunggal", phone: "0852-9614-6408", household_size: 3, verified_by: "St. Darwin Pasaribu" },
+  { id: "WGA-0409", name: "Tumpal Sitorus", rt_rw: "Desa Parparean, Porsea", category: "Buruh Tani", phone: "0822-7410-2909", household_size: 4, verified_by: "Perangkat Desa Parparean" },
+  { id: "WGA-0410", name: "Murniati Br. Pangaribuan", rt_rw: "Desa Sigumpar Dangsina, Sigumpar", category: "Keluarga Kurang Mampu", phone: "0812-6533-8110", household_size: 4, verified_by: "Kader Desa Sigumpar" },
+  { id: "WGA-0411", name: "Bistok Panjaitan", rt_rw: "Desa Narumonda I, Siantar Narumonda", category: "Tukang Bangunan", phone: "0853-7201-4911", household_size: 5, verified_by: "Perangkat Desa Narumonda" },
+  { id: "WGA-0412", name: "Sondang Br. Tambunan", rt_rw: "Desa Lumban Gorat, Balige", category: "Ibu Rumah Tangga", phone: "0813-7088-5212", household_size: 3, verified_by: "Kader Desa Balige" },
+  { id: "WGA-0413", name: "Mangatur Sinaga", rt_rw: "Desa Haunatas, Laguboti", category: "Petani Jagung", phone: "0821-6511-9013", household_size: 4, verified_by: "St. Darwin Pasaribu" },
+  { id: "WGA-0414", name: "Lasma Br. Silalahi", rt_rw: "Desa Soposurung, Balige", category: "Penjahit Rumahan", phone: "0852-6190-3714", household_size: 3, verified_by: "Kader Desa Balige" },
+  { id: "WGA-0415", name: "Sahat Marpaung", rt_rw: "Desa Silaen, Kec. Silaen", category: "Buruh Tani", phone: "0812-6904-1115", household_size: 5, verified_by: "Perangkat Desa Silaen" },
+  { id: "WGA-0416", name: "Op. Tiur Br. Hutapea", rt_rw: "Desa Pintubosi, Laguboti", category: "Lansia", phone: "0813-6155-6816", household_size: 2, verified_by: "St. Darwin Pasaribu" },
+  { id: "WGA-0417", name: "Jannes Sirait", rt_rw: "Desa Lumban Binanga, Uluan", category: "Petani Kopi", phone: "0822-7731-4217", household_size: 4, verified_by: "Perangkat Desa Uluan" },
+  { id: "WGA-0418", name: "Roida Br. Lubis", rt_rw: "Kel. Napitupulu Bagasan, Balige", category: "Keluarga Kurang Mampu", phone: "0853-6082-7318", household_size: 4, verified_by: "Kader Desa Balige" },
+  { id: "WGA-0419", name: "Poltak Nainggolan", rt_rw: "Desa Lumban Dolok, Balige", category: "Pekerja Harian", phone: "0812-6049-8519", household_size: 3, verified_by: "Kader Desa Balige" },
+  { id: "WGA-0420", name: "Masniari Br. Aritonang", rt_rw: "Desa Silamosik, Porsea", category: "Kepala Keluarga Tunggal", phone: "0813-7612-2620", household_size: 3, verified_by: "Perangkat Desa Porsea" },
+];
+
+export const SEED_MERCHANTS: Merchant[] = [
+  {
+    id: "WRG-01",
+    name: "Kedai Sembako Inang Boru Sihombing",
+    owner: "Marta Br. Sihombing",
+    rt_rw: "Jl. Patuan Nagari, Balige",
+    bank_account: "BRI / QRIS •• 4821",
+    unsettled_balance_idr: 72500,
+    total_settled_idr: 480000,
+    redemption_count: 5,
+  },
+  {
+    id: "WRG-02",
+    name: "Toko Pangan Pak Binsar",
+    owner: "Binsar Hutabarat",
+    rt_rw: "Pasar Laguboti, Toba",
+    bank_account: "Bank Sumut / QRIS •• 9012",
+    unsettled_balance_idr: 51000,
+    total_settled_idr: 350000,
+    redemption_count: 4,
+  },
+  {
+    id: "WRG-03",
+    name: "Kedai Harian Op. Ester",
+    owner: "Ester Br. Siahaan",
+    rt_rw: "Desa Sitoluama, Laguboti",
+    bank_account: "BRI Mikro •• 3319",
+    unsettled_balance_idr: 0,
+    total_settled_idr: 290000,
+    redemption_count: 3,
+  },
+  {
+    id: "WRG-04",
+    name: "Warung Beras Porsea Jaya",
+    owner: "Togar Butarbutar",
+    rt_rw: "Jl. Sisingamangaraja, Porsea",
+    bank_account: "Bank Sumut / QRIS •• 7140",
+    unsettled_balance_idr: 0,
+    total_settled_idr: 215000,
+    redemption_count: 2,
+  },
+];
+
+export function buildMobileSeedState(): MobileClearinghouseState {
+  const now = Date.now();
+  const issuedIso = new Date(now - 3 * 3600 * 1000).toISOString();
+  const expIso = new Date(now + 69 * 3600 * 1000).toISOString();
+  const earlierRedeemedIso = new Date(now - 5 * 3600 * 1000).toISOString();
+  const secondRedeemedIso = new Date(now - 4 * 3600 * 1000).toISOString();
+
+  const v1Sig = signVoucherOffline({ voucher_id: "VCH-2026-8841", beneficiary_id: "WGA-0401", commodity_code: "PKG-BERAS-5KG", nominal_idr: 72500, nonce: "n9f81a2b4c6d", expires_at: expIso });
+  const v2Sig = signVoucherOffline({ voucher_id: "VCH-2026-7732", beneficiary_id: "WGA-0402", commodity_code: "PKG-DARURAT-FULL", nominal_idr: 115000, nonce: "a3c5e7f91b2d", expires_at: expIso });
+  const v3Sig = signVoucherOffline({ voucher_id: "VCH-2026-6619", beneficiary_id: "WGA-0403", commodity_code: "PKG-PROTEIN-01", nominal_idr: 42000, nonce: "d4e8f1a09c3b", expires_at: expIso });
+  const v4Sig = signVoucherOffline({ voucher_id: "VCH-2026-4420", beneficiary_id: "WGA-0405", commodity_code: "PKG-DAPUR-02", nominal_idr: 51000, nonce: "c1a9f4b28e0d", expires_at: expIso });
+  const v5Sig = signVoucherOffline({ voucher_id: "VCH-2026-3318", beneficiary_id: "WGA-0406", commodity_code: "PKG-BERAS-5KG", nominal_idr: 72500, nonce: "e8b2c4d71a5f", expires_at: expIso });
+  const v6Sig = signVoucherOffline({ voucher_id: "VCH-2026-2195", beneficiary_id: "WGA-0407", commodity_code: "PKG-DARURAT-FULL", nominal_idr: 115000, nonce: "f2d7a9c14b6e", expires_at: expIso });
+  const v7Sig = signVoucherOffline({ voucher_id: "VCH-2026-5508", beneficiary_id: "WGA-0404", commodity_code: "PKG-BERAS-5KG", nominal_idr: 72500, nonce: "b7c2d9e41f8a", expires_at: expIso });
+  const v8Sig = signVoucherOffline({ voucher_id: "VCH-2026-5102", beneficiary_id: "WGA-0408", commodity_code: "PKG-DAPUR-02", nominal_idr: 51000, nonce: "91e4a7c32d8b", expires_at: expIso });
+
+  const vouchers: Voucher[] = [
+    {
+      id: "VCH-2026-8841",
+      short_code: "CL-8841-K9",
+      beneficiary_id: "WGA-0401",
+      beneficiary_name: "Op. Rina Br. Napitupulu",
+      rt_rw: "Desa Sitoluama, Laguboti",
+      commodity_code: "PKG-BERAS-5KG",
+      commodity_name: "Paket Beras 5 Kg",
+      commodity_items: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)",
+      nominal_idr: 72500,
+      nonce: "n9f81a2b4c6d",
+      issued_at: issuedIso,
+      expires_at: expIso,
+      hmac_signature: v1Sig,
+      status: "ACTIVE",
+    },
+    {
+      id: "VCH-2026-7732",
+      short_code: "CL-7732-M4",
+      beneficiary_id: "WGA-0402",
+      beneficiary_name: "Maruli Siahaan",
+      rt_rw: "Desa Tambunan, Balige",
+      commodity_code: "PKG-DARURAT-FULL",
+      commodity_name: "Paket Sembako Lengkap",
+      commodity_items: "Beras 5 kg, telur 1 kg, minyak goreng 1 liter, susu",
+      nominal_idr: 115000,
+      nonce: "a3c5e7f91b2d",
+      issued_at: issuedIso,
+      expires_at: expIso,
+      hmac_signature: v2Sig,
+      status: "ACTIVE",
+    },
+    {
+      id: "VCH-2026-6619",
+      short_code: "CL-6619-P2",
+      beneficiary_id: "WGA-0403",
+      beneficiary_name: "Tiurma Br. Simanjuntak",
+      rt_rw: "Kel. Sangkar Nihuta, Balige",
+      commodity_code: "PKG-PROTEIN-01",
+      commodity_name: "Paket Telur & Lauk",
+      commodity_items: "Telur ayam 1 kg, tempe 2 papan, tahu 10 potong",
+      nominal_idr: 42000,
+      nonce: "d4e8f1a09c3b",
+      issued_at: issuedIso,
+      expires_at: expIso,
+      hmac_signature: v3Sig,
+      status: "ACTIVE",
+    },
+    {
+      id: "VCH-2026-4420",
+      short_code: "CL-4420-T5",
+      beneficiary_id: "WGA-0405",
+      beneficiary_name: "Rosmawati Br. Tampubolon",
+      rt_rw: "Desa Tampahan, Kec. Tampahan",
+      commodity_code: "PKG-DAPUR-02",
+      commodity_name: "Paket Minyak & Gula",
+      commodity_items: "Minyak goreng 2 liter, gula pasir 1 kg, garam",
+      nominal_idr: 51000,
+      nonce: "c1a9f4b28e0d",
+      issued_at: issuedIso,
+      expires_at: expIso,
+      hmac_signature: v4Sig,
+      status: "ACTIVE",
+    },
+    {
+      id: "VCH-2026-3318",
+      short_code: "CL-3318-B8",
+      beneficiary_id: "WGA-0406",
+      beneficiary_name: "Parlindungan Pardede",
+      rt_rw: "Desa Lumban Pea, Balige",
+      commodity_code: "PKG-BERAS-5KG",
+      commodity_name: "Paket Beras 5 Kg",
+      commodity_items: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)",
+      nominal_idr: 72500,
+      nonce: "e8b2c4d71a5f",
+      issued_at: issuedIso,
+      expires_at: expIso,
+      hmac_signature: v5Sig,
+      status: "ACTIVE",
+    },
+    {
+      id: "VCH-2026-2195",
+      short_code: "CL-2195-N3",
+      beneficiary_id: "WGA-0407",
+      beneficiary_name: "Op. Doli Manurung",
+      rt_rw: "Desa Patane II, Porsea",
+      commodity_code: "PKG-DARURAT-FULL",
+      commodity_name: "Paket Sembako Lengkap",
+      commodity_items: "Beras 5 kg, telur 1 kg, minyak goreng 1 liter, susu",
+      nominal_idr: 115000,
+      nonce: "f2d7a9c14b6e",
+      issued_at: issuedIso,
+      expires_at: expIso,
+      hmac_signature: v6Sig,
+      status: "ACTIVE",
+    },
+    {
+      id: "VCH-2026-5508",
+      short_code: "CL-5508-R7",
+      beneficiary_id: "WGA-0404",
+      beneficiary_name: "Hotman Hutagaol",
+      rt_rw: "Desa Sibuea, Laguboti",
+      commodity_code: "PKG-BERAS-5KG",
+      commodity_name: "Paket Beras 5 Kg",
+      commodity_items: "Beras 5 kg (khusus sembako, tidak bisa diuangkan)",
+      nominal_idr: 72500,
+      nonce: "b7c2d9e41f8a",
+      issued_at: earlierRedeemedIso,
+      expires_at: expIso,
+      hmac_signature: v7Sig,
+      status: "REDEEMED",
+      redeemed_by_merchant_id: "WRG-01",
+      redeemed_by_merchant_name: "Kedai Sembako Inang Boru Sihombing",
+      redeemed_at: earlierRedeemedIso,
+    },
+    {
+      id: "VCH-2026-5102",
+      short_code: "CL-5102-S4",
+      beneficiary_id: "WGA-0408",
+      beneficiary_name: "Nurhayati Br. Sibarani",
+      rt_rw: "Desa Sibarani Nasampulu, Laguboti",
+      commodity_code: "PKG-DAPUR-02",
+      commodity_name: "Paket Minyak & Gula",
+      commodity_items: "Minyak goreng 2 liter, gula pasir 1 kg, garam",
+      nominal_idr: 51000,
+      nonce: "91e4a7c32d8b",
+      issued_at: secondRedeemedIso,
+      expires_at: expIso,
+      hmac_signature: v8Sig,
+      status: "REDEEMED",
+      redeemed_by_merchant_id: "WRG-02",
+      redeemed_by_merchant_name: "Toko Pangan Pak Binsar",
+      redeemed_at: secondRedeemedIso,
+    },
+  ];
+
+  const tx1Hash = sha256Hex(
+    `${GENESIS_HASH}|VCH-2026-5508|WRG-01|72500|${earlierRedeemedIso}|${v7Sig}`
+  );
+  const tx2Hash = sha256Hex(
+    `${tx1Hash}|VCH-2026-5102|WRG-02|51000|${secondRedeemedIso}|${v8Sig}`
+  );
+
+  const ledger: LedgerEntry[] = [
+    {
+      id: "TX-4B8E21D9",
+      client_tx_id: "CTX-SEED-5102",
+      voucher_id: "VCH-2026-5102",
+      short_code: "CL-5102-S4",
+      beneficiary_id: "WGA-0408",
+      merchant_id: "WRG-02",
+      merchant_name: "Toko Pangan Pak Binsar",
+      commodity_name: "Paket Minyak & Gula",
+      nominal_idr: 51000,
+      hmac_signature: v8Sig,
+      prev_hash: tx1Hash,
+      tx_hash: tx2Hash,
+      sync_mode: "ONLINE",
+      timestamp: secondRedeemedIso,
+    },
+    {
+      id: "TX-9F2A10C4",
+      client_tx_id: "CTX-SEED-5508",
+      voucher_id: "VCH-2026-5508",
+      short_code: "CL-5508-R7",
+      beneficiary_id: "WGA-0404",
+      merchant_id: "WRG-01",
+      merchant_name: "Kedai Sembako Inang Boru Sihombing",
+      commodity_name: "Paket Beras 5 Kg",
+      nominal_idr: 72500,
+      hmac_signature: v7Sig,
+      prev_hash: GENESIS_HASH,
+      tx_hash: tx1Hash,
+      sync_mode: "OFFLINE_BATCH_SYNC",
+      timestamp: earlierRedeemedIso,
+    },
+  ];
+
+  return {
+    pool_total_idr: 8500000,
+    fraud_blocked_count: 0,
+    beneficiaries: SEED_BENEFICIARIES.map((b) => ({ ...b })),
+    merchants: SEED_MERCHANTS.map((m) => ({ ...m })),
+    vouchers,
+    ledger,
+    commodity_catalog: DEFAULT_COMMODITIES,
+  };
+}

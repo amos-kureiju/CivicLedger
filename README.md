@@ -8,6 +8,10 @@
 - **Jessica Ruth**
 - **Jonathan Pasaribu**
 
+**Full Technical Documentation:** [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md)  
+**Studi Kasus Pengujian (Test Cases):** [`docs/STUDI_KASUS_PENGUJIAN.md`](docs/STUDI_KASUS_PENGUJIAN.md)  
+**Aplikasi Mobile (React Native + Expo):** [`mobile/README.md`](mobile/README.md)
+
 ---
 
 ## 1. Overview & Problem Addressed

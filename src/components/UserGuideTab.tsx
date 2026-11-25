@@ -30,178 +30,173 @@ interface FeatureGuideItem {
 const FEATURE_GUIDES: FeatureGuideItem[] = [
   {
     id: "organizer",
-    shortLabel: "Koordinator",
+    shortLabel: "Pengurus",
     number: "01",
     targetTab: "COORDINATOR",
-    title: "Konsol Koordinator — Registrasi & Penerbitan Voucher",
-    role: "Koordinator Komunitas (RT/RW)",
+    title: "Beranda Pengurus: Data Warga & Buat Kupon",
+    role: "Pengurus Bansos",
     summary:
-      "Daftarkan keluarga rentan dan warung mitra terverifikasi, lalu terbitkan voucher pangan terkunci yang ditandatangani secara kriptografis dengan HMAC-SHA256.",
+      "Lihat daftar 20 warga penerima, tambah warga atau kedai baru, lalu buat kupon sembako.",
     imageSrc: "/guides/guide-1-organizer.jpg",
-    imageCaption:
-      "Gambar 1 — Koordinator komunitas menyiapkan alokasi voucher bantuan pangan.",
+    imageCaption: "Foto 1 — Pengurus menyiapkan pembagian kupon sembako.",
     steps: [
       {
-        title: "Daftarkan Warga & Warung Mitra (Opsional)",
+        title: "Tambah Warga atau Kedai (Bila Perlu)",
         detail:
-          "Klik + Warga atau + Warung di kartu Terbitkan Voucher untuk menambahkan penerima manfaat atau warung kelontong baru ke registri.",
+          "Klik + Warga atau + Kedai di kotak Buat Kupon Sembako untuk menambah data baru.",
       },
       {
-        title: "Pilih Penerima Manfaat & Paket Komoditas",
+        title: "Pilih Penerima & Paket Sembako",
         detail:
-          "Pilih warga pada dropdown Penerima Manfaat dan tentukan paket sembako (misal Paket Beras Lokal 5 Kg) agar bantuan terkunci untuk pangan pokok.",
+          "Pilih nama warga dari dropdown atau klik tab Daftar Penerima di kanan, lalu pilih paket sembako yang sesuai.",
       },
       {
-        title: "Terbitkan & Tandatangani Voucher",
+        title: "Buat Kupon Sembako",
         detail:
-          "Pilih masa berlaku (24 jam, 72 jam, atau 7 hari) lalu klik Terbitkan & Tandatangani Voucher. Sistem otomatis membuat nonce sekali pakai dan tanda tangan HMAC-SHA256.",
+          "Tentukan masa berlaku kupon lalu klik Buat Kupon Sembako. Kode kupon otomatis dibuat.",
       },
       {
-        title: "Cari, Filter & Lanjutkan Alur Demo",
+        title: "Lihat Kartu atau Langsung Tukar",
         detail:
-          "Gunakan pencarian dan filter status (Semua / Aktif / Ditukar / Cair) pada Registri Alokasi, lalu klik Kartu atau Tukar pada voucher aktif.",
+          "Di tabel Daftar Kupon sebelah kanan, klik Kartu untuk melihat QR atau klik Tukar untuk tes di Kasir Kedai.",
       },
     ],
     proTip:
-      "Penerbitan voucher baru memerlukan mode Online; setelah terbit, penukaran di warung tetap bisa berjalan 100% offline.",
+      "Jika lupa kata sandi saat masuk, klik tab Lupa Sandi untuk meminta kode 6 angka dan mengganti sandi baru.",
   },
   {
     id: "beneficiary",
-    shortLabel: "Kartu Warga",
+    shortLabel: "Kupon Warga",
     number: "02",
     targetTab: "BENEFICIARY",
-    title: "Kartu Warga — QR Dinamis & Kode SMS Cadangan",
-    role: "Keluarga Penerima Manfaat",
+    title: "Kupon Warga: QR di HP & Kode Kertas",
+    role: "Warga Penerima",
     summary:
-      "Akses inklusif dua jalur: kode QR dinamis untuk pengguna smartphone serta kode alfanumerik 6-karakter via SMS atau kupon cetak untuk warga lansia.",
+      "Warga bisa menunjukkan QR lewat HP atau membawa kode kupon yang dicetak di kertas ke kedai terdekat.",
     imageSrc: "/guides/guide-2-beneficiary.jpg",
-    imageCaption:
-      "Gambar 2 — Kode QR kontras tinggi berdampingan dengan kode kupon cetak/SMS 6-karakter.",
+    imageCaption: "Foto 2 — Contoh QR kupon dan kode pendek di kertas.",
     steps: [
       {
-        title: "Pilih Profil Keluarga Penerima",
+        title: "Perbesar Tulisan Bila Perlu",
         detail:
-          "Pilih nama warga pada dropdown Keluarga Penerima Manfaat untuk melihat seluruh voucher aktif maupun yang sudah ditukarkan.",
+          "Di panel kiri bawah (atau kanan atas di HP), pilih Huruf: Besar agar tulisan lebih besar dan mudah dibaca.",
       },
       {
-        title: "Tunjukkan Kode QR Dinamis",
+        title: "Tunjukkan QR di Layar HP",
         detail:
-          "Pengguna smartphone cukup menunjukkan QR hitam-putih berkontras tinggi yang memuat payload JSON bertanda tangan HMAC-SHA256 untuk diverifikasi offline.",
+          "Tunjukkan kotak QR putih kepada pemilik kedai untuk langsung dipindai.",
       },
       {
-        title: "Salin SMS atau Cetak Kupon Kertas",
+        title: "Salin SMS atau Cetak Kertas",
         detail:
-          "Klik Salin Slip SMS untuk mengirim kode 6-karakter (misal CL-8841-K9) lewat SMS/WhatsApp, atau klik Cetak Slip untuk mencetak kupon kertas.",
+          "Klik Salin SMS / WA untuk mengirim kode kupon lewat pesan, atau klik Cetak Kertas untuk dicetak.",
       },
       {
-        title: "Bawa ke Terminal Warung",
+        title: "Tukar di Kedai Mitra",
         detail:
-          "Klik Buka di Terminal Warung untuk mensimulasikan warga menukarkan voucher tersebut di kasir warung mitra.",
+          "Bawa HP atau kertas kupon ke kedai terdaftar di Balige, Laguboti, Sitoluama, atau Porsea.",
       },
     ],
     proTip:
-      "Kotak QR selalu memakai latar putih bersih bahkan saat Mode Gelap aktif agar kamera HP standar tetap fokus dengan cepat.",
+      "Kotak QR selalu berlatar putih supaya mudah dibaca kamera HP pemilik kedai.",
   },
   {
     id: "merchant",
-    shortLabel: "Terminal Warung",
+    shortLabel: "Kasir Kedai",
     number: "03",
     targetTab: "MERCHANT_POS",
-    title: "Terminal Warung — Verifikasi Offline & Uji Konflik",
-    role: "Pemilik Warung Mitra",
+    title: "Kasir Kedai: Cek Kupon Online & Offline",
+    role: "Pemilik Kedai",
     summary:
-      "Verifikasi keaslian voucher dalam hitungan milidetik lewat browser HP biasa tanpa internet menggunakan Web Crypto API dan antrean IndexedDB.",
+      "Pemilik kedai bisa mengecek dan menerima kupon warga lewat browser HP meski sinyal internet sedang tidak ada.",
     imageSrc: "/guides/guide-3-merchant.jpg",
-    imageCaption:
-      "Gambar 3 — Pemilik warung memindai voucher digital warga langsung dari browser ponsel.",
+    imageCaption: "Foto 3 — Pemilik kedai mengecek kupon warga lewat HP.",
     steps: [
       {
-        title: "Aktifkan Mode Offline (Sidebar Kiri)",
+        title: "Coba Mode Offline",
         detail:
-          "Ubah Mode Koneksi ke Offline di sidebar kiri bawah untuk mensimulasikan hilangnya sinyal internet di gang padat.",
+          "Ubah tombol Sinyal di kiri bawah ke Offline untuk mengetes kondisi tanpa sinyal internet.",
       },
       {
-        title: "Pindai QR, Pilih Cepat, atau Ketik Kode",
+        title: "Scan Kamera, Pilih Cepat, atau Ketik Kode",
         detail:
-          "Pilih Warung Aktif, lalu klik Pindai Kamera, pilih voucher di daftar Pilih Cepat Voucher, atau ketik kode 6-karakter secara manual.",
+          "Pilih nama kedai, lalu klik Scan Kamera, pilih kupon di daftar cepat, atau ketik kodenya.",
       },
       {
-        title: "Verifikasi HMAC-SHA256 & Catat Offline",
+        title: "Klik Cek & Terima Kupon",
         detail:
-          "Klik Verifikasi HMAC-SHA256 & Tukar. Lihat panel Verifikator Web Crypto yang membuktikan validasi <5 ms dan transaksi tersimpan di Antrean Offline (IndexedDB).",
+          "Jika muncul tanda hijau Kupon Sah, barang sembako boleh diserahkan ke warga. Saat offline, transaksi disimpan dulu di HP.",
       },
       {
-        title: "Uji Anti-Fraud & Konflik Lintas Perangkat",
+        title: "Tes Kupon Palsu & Kupon Ganda",
         detail:
-          "Klik Uji Manipulasi Payload untuk melihat pemalsuan nominal langsung ditolak offline, atau klik Simulasi Konflik Offline lalu Sinkron & Rekonsiliasi Batch.",
+          "Klik Tes Kupon Palsu untuk melihat penolakan nominal palsu, atau klik Tes Kupon Ganda lalu Kirim Semua ke Pusat.",
       },
     ],
     proTip:
-      "Setiap transaksi offline diberi client_tx_id unik agar server dapat menolak klaim ganda secara otomatis saat beberapa perangkat warung kembali online.",
+      "Begitu sinyal kembali, klik Kirim Semua ke Pusat supaya semua catatan offline masuk ke saldo kedai.",
   },
   {
     id: "clearinghouse",
-    shortLabel: "Kliring",
+    shortLabel: "Pencairan",
     number: "04",
     targetTab: "CLEARINGHOUSE",
-    title: "Kliring & Buku Besar — Rekonsiliasi & Pencairan",
-    role: "Bendahara & Auditor Komunitas",
+    title: "Pencairan & Riwayat Transaksi",
+    role: "Pengurus / Bendahara",
     summary:
-      "Tinjau hasil rekonsiliasi konflik di sisi server, verifikasi integritas rantai hash SHA-256, dan cairkan dana ke rekening/QRIS warung mitra.",
+      "Cairkan saldo belanja ke rekening kedai dan periksa keaslian seluruh catatan transaksi.",
     imageSrc: "/guides/guide-4-clearinghouse.jpg",
-    imageCaption:
-      "Gambar 4 — Audit transaksi buku besar berantai hash dan antrean pencairan warung.",
+    imageCaption: "Foto 4 — Pemeriksaan riwayat penukaran dan pencairan kedai.",
     steps: [
       {
-        title: "Kelola Antrean Pencairan Warung",
+        title: "Cairkan Saldo Kedai",
         detail:
-          "Pantau saldo Menunggu Cair vs. Sudah Cair di tiap warung. Klik Cairkan Warung atau Cairkan Semua untuk membuat struk batch SHA-256 (jalur transfer simulasi).",
+          "Cek angka Belum Cair di tiap kartu kedai, lalu klik Cairkan Saldo atau Cairkan Semua.",
       },
       {
-        title: "Verifikasi Integritas Rantai Hash SHA-256",
+        title: "Cek Keaslian Data",
         detail:
-          "Klik Verifikasi Integritas Rantai pada header Buku Besar Audit untuk memeriksa keutuhan setiap tautan prev_hash → tx_hash dari blok genesis hingga transaksi terbaru.",
+          "Klik Cek Keaslian Data di atas tabel riwayat untuk memastikan tidak ada transaksi yang diubah.",
       },
       {
-        title: "Periksa Log Rekonsiliasi Offline",
+        title: "Lihat Riwayat Offline & Bukti Pencairan",
         detail:
-          "Buka panel Log Audit Rekonsiliasi untuk melihat seluruh transaksi SYNCED yang sah beserta penolakan DUPLICATE_CONFLICT atau INVALID_SIGNATURE.",
+          "Di bagian bawah terlihat catatan kiriman offline (termasuk kupon ganda yang ditolak) dan bukti pencairan kedai.",
       },
     ],
     proTip:
-      "Jalankan backend Golang (go run . atau docker compose up) agar indikator Mesin berubah menjadi Go API · Lokal atau Go API · PostgreSQL.",
+      "Klik tombol Kode Hash (Juri) di kanan atas tabel bila ingin melihat hash SHA-256 setiap transaksi.",
   },
   {
     id: "reports",
     shortLabel: "Laporan",
     number: "05",
     targetTab: "REPORTS",
-    title: "Laporan, Ekspor Audit & Aksesibilitas Tema",
-    role: "Koordinator, Donatur & Juri",
+    title: "Laporan Bansos & Unduh Excel",
+    role: "Pengurus & Donatur",
     summary:
-      "Pantau kinerja penyaluran bantuan, unduh laporan audit CSV/JSON yang transparan, dan ganti ke Mode Terang berkontras tinggi untuk penggunaan luar ruangan.",
+      "Pantau persentase kupon yang sudah dipakai dan unduh laporan dalam format Excel (CSV) atau JSON.",
     imageSrc: "/guides/guide-5-reports.jpg",
-    imageCaption:
-      "Gambar 5 — Ekspor laporan audit transparan dan grafik distribusi bantuan pangan.",
+    imageCaption: "Foto 5 — Ringkasan grafik pembagian sembako dan ekspor data.",
     steps: [
       {
-        title: "Tinjau Analitik Penyaluran",
+        title: "Cek Grafik Paket & Kedai",
         detail:
-          "Pantau Tingkat Penukaran, perbandingan transaksi Offline vs. Online, jumlah Anomali Diblokir, grafik Alokasi Komoditas, dan Omzet Warung.",
+          "Buka menu Laporan Bansos untuk melihat pembagian paket sembako dan total belanja di tiap kedai.",
       },
       {
-        title: "Ekspor Data CSV & Audit JSON",
+        title: "Unduh Excel (CSV) atau JSON",
         detail:
-          "Klik Ekspor CSV untuk membuka buku besar di Excel/Google Sheets, atau klik Audit JSON untuk menyimpan arsip audit lengkap termasuk log rekonsiliasi.",
+          "Klik Unduh Excel (CSV) untuk membuka daftar transaksi di Microsoft Excel atau Google Sheets.",
       },
       {
-        title: "Ganti Tampilan Gelap / Terang",
+        title: "Atur Tampilan Layar",
         detail:
-          "Gunakan sakelar Tampilan (Gelap / Terang) di sidebar kiri atau bar atas ponsel agar layar tetap jelas terbaca oleh pemilik warung di bawah sinar matahari.",
+          "Pilih Layar Siang atau Malam di panel kiri bawah sesuai kondisi pencahayaan.",
       },
     ],
     proTip:
-      "Tinjau kartu Arsitektur Sistem & Keterbukaan Ruang Lingkup di bagian bawah halaman Laporan untuk ringkasan transparansi STACK 2026.",
+      "Ringkasan fitur yang sudah berjalan dan batasan simulasi tercantum di bagian bawah halaman Laporan Bansos.",
   },
 ];
 
@@ -224,40 +219,37 @@ export default function UserGuideTab({ onNavigate }: UserGuideTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header & Filter */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800/80">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 pb-4 border-b border-line/55">
         <div>
-          <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Panduan Fitur Interaktif &amp; Langkah Penggunaan
-          </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Panduan visual langkah demi langkah untuk koordinator komunitas,
-            warga penerima manfaat, pemilik warung, dan juri.
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary">
+            Cara Pakai CivicLedger
+          </h1>
+          <p className="text-sm text-ink-secondary mt-0.5">
+            Panduan singkat penggunaan untuk pengurus, warga penerima, dan
+            pemilik kedai.
           </p>
         </div>
 
-        <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+        <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-card border border-line/70 shadow-sm">
           <button
             type="button"
             onClick={() => setSelectedFilter("ALL")}
-            className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${
-              selectedFilter === "ALL"
-                ? "bg-white dark:bg-zinc-800 text-zinc-950 dark:text-zinc-100 shadow-sm dark:shadow-none"
-                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${selectedFilter === "ALL"
+                ? "bg-cta-bg text-cta-ink"
+                : "text-ink-muted hover:text-ink-primary"
+              }`}
           >
-            Semua Fitur (5)
+            Semua (5)
           </button>
           {FEATURE_GUIDES.map((g) => (
             <button
               key={g.id}
               type="button"
               onClick={() => setSelectedFilter(g.id)}
-              className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${
-                selectedFilter === g.id
-                  ? "bg-white dark:bg-zinc-800 text-zinc-950 dark:text-zinc-100 shadow-sm dark:shadow-none"
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-              }`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${selectedFilter === g.id
+                  ? "bg-cta-bg text-cta-ink"
+                  : "text-ink-muted hover:text-ink-primary"
+                }`}
             >
               {g.number}. {g.shortLabel}
             </button>
@@ -265,42 +257,44 @@ export default function UserGuideTab({ onNavigate }: UserGuideTabProps) {
         </div>
       </div>
 
-      {/* Bilah 5 Langkah Alur Hidup Voucher */}
-      <div className="grid grid-cols-1 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200 dark:divide-zinc-800/80 border border-zinc-200 dark:border-zinc-800/90 bg-white dark:bg-[#111113] rounded-xl overflow-hidden text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
         {FEATURE_GUIDES.map((g) => (
           <button
             key={g.id}
             type="button"
             onClick={() => setSelectedFilter(g.id)}
-            className="p-4 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition group"
+            className={`p-4 text-left rounded-2xl border transition-all group shadow-sm ${selectedFilter === g.id
+                ? "bg-emeraldTech/10 border-cta-bg"
+                : "bg-card border-line/70 hover:bg-nested/50"
+              }`}
           >
-            <span className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
-              LANGKAH {g.number}
+            <span className="font-mono text-[11px] text-emeraldTech font-bold">
+              TAHAP {g.number}
             </span>
-            <p className="font-medium text-zinc-900 dark:text-zinc-100 mt-1 group-hover:underline underline-offset-4">
-              {g.title.split(" — ")[0]}
+            <p className="text-sm font-bold text-ink-primary mt-1 group-hover:underline underline-offset-4">
+              {g.shortLabel}
             </p>
-            <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
-              {g.role}
-            </p>
+            <p className="text-xs text-ink-muted mt-0.5 truncate">{g.role}</p>
           </button>
         ))}
       </div>
 
-      {/* Kartu Panduan Fitur */}
-      <div className="space-y-6">
+      <div className="space-y-5">
         {visibleGuides.map((guide) => (
           <article
             key={guide.id}
-            className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 overflow-hidden"
+            className="bg-card rounded-2xl border border-line/75 shadow-sm overflow-hidden"
           >
             <div className="grid grid-cols-1 xl:grid-cols-12">
-              {/* Kolom Foto Panduan */}
-              <div className="xl:col-span-5 bg-zinc-50 dark:bg-[#0D0D10] p-5 border-b xl:border-b-0 xl:border-r border-zinc-200 dark:border-zinc-800/80 flex flex-col justify-between gap-3">
+              <div className="xl:col-span-5 bg-surface/70 p-5 border-b xl:border-b-0 xl:border-r border-line/50 flex flex-col justify-between gap-4">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
-                    <span>PANDUAN {guide.number}</span>
-                    <span>{guide.role}</span>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono font-bold text-emeraldTech">
+                      PANDUAN {guide.number}
+                    </span>
+                    <span className="font-semibold text-ink-muted">
+                      {guide.role}
+                    </span>
                   </div>
 
                   <button
@@ -312,65 +306,64 @@ export default function UserGuideTab({ onNavigate }: UserGuideTabProps) {
                         title: guide.title,
                       })
                     }
-                    className="group relative block w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 aspect-video text-left"
+                    className="group relative block w-full overflow-hidden rounded-xl border border-line/70 bg-nested aspect-video text-left"
                   >
                     <img
                       src={guide.imageSrc}
                       alt={guide.imageCaption}
                       className="w-full h-full object-cover transition duration-300 group-hover:scale-[1.02]"
                     />
-                    <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-950/80 text-zinc-100 text-[10px] font-mono backdrop-blur-sm opacity-90 group-hover:opacity-100">
+                    <span className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/75 text-white text-[11px] font-semibold backdrop-blur-sm">
                       <Maximize2 className="w-3 h-3" />
                       Perbesar
                     </span>
                   </button>
 
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  <p className="text-xs text-ink-secondary leading-relaxed">
                     {guide.imageCaption}
                   </p>
                 </div>
 
-                <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-2">
-                  <p className="text-[11px] text-zinc-500">
-                    Siap mencoba fitur ini?
-                  </p>
+                <div className="pt-3 border-t border-line/50 flex items-center justify-between gap-2">
+                  <span className="text-xs text-ink-muted">
+                    Langsung coba menu ini:
+                  </span>
                   <button
                     type="button"
                     onClick={() => onNavigate(guide.targetTab)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-medium shrink-0 transition"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-bold shrink-0 transition shadow-sm"
                   >
-                    <span>Buka Fitur</span>
+                    <span>Buka Menu</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Kolom Langkah-Langkah */}
-              <div className="xl:col-span-7 p-6 flex flex-col justify-between gap-5">
+              <div className="xl:col-span-7 p-5 sm:p-6 flex flex-col justify-between gap-5">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-base font-semibold tracking-[-0.015em] text-zinc-950 dark:text-zinc-50">
+                    <h2 className="text-lg font-bold text-ink-primary">
                       {guide.title}
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                    </h2>
+                    <p className="text-sm text-ink-secondary mt-1 leading-relaxed">
                       {guide.summary}
                     </p>
                   </div>
 
-                  <ol className="space-y-3">
+                  <ol className="space-y-2.5">
                     {guide.steps.map((step, idx) => (
                       <li
                         key={step.title}
-                        className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50/80 dark:bg-zinc-950/60 border border-zinc-200/80 dark:border-zinc-800/80"
+                        className="flex items-start gap-3 p-3.5 rounded-xl bg-surface border border-line/55"
                       >
-                        <span className="font-mono text-[11px] font-medium text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="font-mono text-xs font-bold text-cta-ink bg-cta-bg w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">
                           {idx + 1}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                          <p className="text-sm font-bold text-ink-primary">
                             {step.title}
                           </p>
-                          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                          <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
                             {step.detail}
                           </p>
                         </div>
@@ -379,10 +372,10 @@ export default function UserGuideTab({ onNavigate }: UserGuideTabProps) {
                   </ol>
                 </div>
 
-                <div className="flex items-start gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800/80 text-[11px] text-zinc-600 dark:text-zinc-400">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 pt-3 border-t border-line/50 text-xs text-ink-secondary leading-relaxed">
+                  <CheckCircle2 className="w-4 h-4 text-emeraldTech shrink-0 mt-0.5" />
                   <span>
-                    <strong className="text-zinc-900 dark:text-zinc-200 font-medium">
+                    <strong className="text-ink-primary font-bold">
                       Catatan:
                     </strong>{" "}
                     {guide.proTip}
@@ -394,37 +387,36 @@ export default function UserGuideTab({ onNavigate }: UserGuideTabProps) {
         ))}
       </div>
 
-      {/* Modal Perbesar Gambar */}
       {lightboxImage && (
         <div
           onClick={() => setLightboxImage(null)}
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="max-w-4xl w-full bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl"
+            className="max-w-4xl w-full bg-card rounded-2xl border border-line overflow-hidden shadow-2xl"
           >
-            <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
+            <div className="px-5 py-3.5 border-b border-line/60 flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-ink-primary truncate">
                 {lightboxImage.title}
               </span>
               <button
                 type="button"
                 onClick={() => setLightboxImage(null)}
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                aria-label="Tutup pratinjau"
+                className="text-ink-muted hover:text-ink-primary p-1"
+                aria-label="Tutup foto"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="bg-zinc-950">
+            <div className="bg-black">
               <img
                 src={lightboxImage.src}
                 alt={lightboxImage.caption}
                 className="w-full max-h-[75vh] object-contain"
               />
             </div>
-            <div className="px-4 py-2.5 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="px-5 py-3 text-xs text-ink-secondary border-t border-line/60">
               {lightboxImage.caption}
             </div>
           </div>

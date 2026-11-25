@@ -90,7 +90,7 @@ func TestOfflineBatchSyncConflictReconciliation(t *testing.T) {
 			VoucherID:     v.ID,
 			ShortCode:     v.ShortCode,
 			MerchantID:    "WRG-01",
-			MerchantName:  "Warung Kelontong Berkah Bu Yati",
+			MerchantName:  "Kedai Sembako Inang Boru Sihombing",
 			HMACSignature: v.HMACSignature,
 		},
 		{
@@ -98,7 +98,7 @@ func TestOfflineBatchSyncConflictReconciliation(t *testing.T) {
 			VoucherID:     v.ID,
 			ShortCode:     v.ShortCode,
 			MerchantID:    "WRG-02",
-			MerchantName:  "Toko Sembako Pak Asep Mandiri",
+			MerchantName:  "Toko Pangan Pak Binsar",
 			HMACSignature: v.HMACSignature,
 		},
 	})
@@ -123,9 +123,9 @@ func TestHTTPHealthAndMerchantRegistration(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(AddMerchantInput{
-		Name:        "Warung Sembako Maju Jaya",
-		Owner:       "Pak Budi",
-		RtRw:        "RT 03 / RW 08 Coblong",
+		Name:        "Kedai Beras Balige Makmur",
+		Owner:       "Tumpak Simbolon",
+		RtRw:        "Balige, Kab. Toba",
 		BankAccount: "BRI / QRIS •• 7788",
 	})
 	mReq := httptest.NewRequest(http.MethodPost, "/api/v1/merchants", bytes.NewReader(body))

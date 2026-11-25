@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Download } from "lucide-react";
+import { Download, BarChart3, Store, ShieldCheck, Layers } from "lucide-react";
 import {
   BackendEngineType,
   Beneficiary,
@@ -46,12 +46,16 @@ export default function ReportsComplianceTab({
     (v) => v.status === "REDEEMED" || v.status === "SETTLED"
   ).length;
   const redemptionRate =
-    totalVouchers > 0 ? Math.round((redeemedOrSettled / totalVouchers) * 100) : 0;
+    totalVouchers > 0
+      ? Math.round((redeemedOrSettled / totalVouchers) * 100)
+      : 0;
 
   const offlineSyncedCount = ledger.filter(
     (l) => l.sync_mode === "OFFLINE_BATCH_SYNC"
   ).length;
-  const onlineSyncedCount = ledger.filter((l) => l.sync_mode === "ONLINE").length;
+  const onlineSyncedCount = ledger.filter(
+    (l) => l.sync_mode === "ONLINE"
+  ).length;
 
   const conflictReconciledCount = reconciliationLogs.filter(
     (r) => r.outcome !== "SYNCED"
@@ -87,116 +91,142 @@ export default function ReportsComplianceTab({
 
   const engineLabel =
     backendEngine === "GO_POSTGRES"
-      ? "Golang REST API · PostgreSQL 16"
+      ? "Go API + PostgreSQL"
       : backendEngine === "GO_LOCAL"
-        ? "Golang REST API · Penyimpanan Lokal"
-        : "Next.js Lokal (Cadangan)";
+        ? "Go API (Lokal)"
+        : "Next.js Lokal";
 
   return (
     <div className="space-y-6">
-      {/* Bar Ekspor */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-zinc-200 dark:border-zinc-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pb-4 border-b border-line/55">
         <div>
-          <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Ringkasan Operasional &amp; Ekspor Audit
-          </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Unduh log transaksi yang dapat diverifikasi dan tinjau keterbukaan
-            ruang lingkup STACK 2026.
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary">
+            Laporan Bansos Wilayah Toba
+          </h1>
+          <p className="text-sm text-ink-secondary mt-0.5">
+            Ringkasan pembagian kupon sembako dan tombol unduh laporan.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={onExportCsv}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-medium transition"
+            className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-sm font-semibold transition shadow-sm"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Ekspor CSV</span>
+            <Download className="w-4 h-4" />
+            <span>Unduh Excel (CSV)</span>
           </button>
           <button
             type="button"
             onClick={onExportJson}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white hover:bg-zinc-100 text-zinc-800 border border-zinc-300 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-800 text-xs font-medium transition"
+            className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-card hover:bg-nested text-ink-primary border border-line/70 shadow-sm text-sm font-semibold transition"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Audit JSON</span>
+            <Download className="w-4 h-4 text-emeraldTech" />
+            <span>Unduh JSON</span>
           </button>
         </div>
       </div>
 
-      {/* KPI 4 Kolom */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200 dark:divide-zinc-800/80 border border-zinc-200 dark:border-zinc-800/90 bg-white dark:bg-[#111113] rounded-xl overflow-hidden">
-        <div className="p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-            Tingkat Penukaran
-          </p>
-          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
-            {redemptionRate}%
-          </p>
-          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-            {redeemedOrSettled} dari {totalVouchers} voucher telah ditukar
-          </p>
+      {/* 4 Kartu KPI */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink-secondary">
+              Kupon Terpakai
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
+              <BarChart3 className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <p className="font-mono text-2xl font-bold tabular-nums text-ink-primary">
+              {redemptionRate}%
+            </p>
+            <p className="text-xs text-ink-muted mt-1 tabular-nums">
+              {redeemedOrSettled} dari {totalVouchers} kupon
+            </p>
+          </div>
         </div>
 
-        <div className="p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-            Sinkron Offline / Online
-          </p>
-          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
-            {offlineSyncedCount} / {onlineSyncedCount}
-          </p>
-          <p className="text-xs text-zinc-500 mt-1">
-            Batch offline vs. transaksi langsung
-          </p>
+        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink-secondary">
+              Offline / Online
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-amberTech/12 text-amberTech flex items-center justify-center">
+              <Layers className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <p className="font-mono text-2xl font-bold tabular-nums text-ink-primary">
+              {offlineSyncedCount} / {onlineSyncedCount}
+            </p>
+            <p className="text-xs text-ink-muted mt-1">
+              Dari offline vs langsung
+            </p>
+          </div>
         </div>
 
-        <div className="p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-            Anomali Diblokir
-          </p>
-          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
-            {fraudBlockedCount}
-          </p>
-          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-            {conflictReconciledCount} konflik offline direkonsiliasi
-          </p>
+        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink-secondary">
+              Kupon Ditolak
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <p className="font-mono text-2xl font-bold tabular-nums text-ink-primary">
+              {fraudBlockedCount}
+            </p>
+            <p className="text-xs text-ink-muted mt-1 tabular-nums">
+              {conflictReconciledCount} konflik ganda tercatat
+            </p>
+          </div>
         </div>
 
-        <div className="p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-500">
-            Omzet Warung Lokal
-          </p>
-          <p className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-zinc-950 dark:text-zinc-50 mt-2">
-            {formatRupiah(totalMerchantTurnover)}
-          </p>
-          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-            {merchants.length} warung · {beneficiaries.length} keluarga
-          </p>
+        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink-secondary">
+              Total Belanja Kedai
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-amberTech/12 text-amberTech flex items-center justify-center">
+              <Store className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <p className="font-mono text-2xl font-bold tabular-nums text-ink-primary">
+              {formatRupiah(totalMerchantTurnover)}
+            </p>
+            <p className="text-xs text-ink-muted mt-1 tabular-nums">
+              {merchants.length} kedai · {beneficiaries.length} penerima
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Grafik Distribusi */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-card rounded-2xl border border-line/75 shadow-sm p-5">
+          <div className="flex items-start justify-between gap-2 mb-5">
             <div>
-              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                Alokasi per Paket Komoditas
-              </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Distribusi bantuan pangan pokok terkunci
+              <h2 className="text-base font-bold text-ink-primary">
+                Pembagian Paket Sembako
+              </h2>
+              <p className="text-xs text-ink-secondary mt-0.5">
+                Jumlah kupon berdasarkan jenis paket
               </p>
             </div>
-            <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
-              Kas: {formatRupiah(poolTotalIdr)}
+            <span className="font-mono text-xs font-semibold text-emeraldTech bg-emeraldTech/10 px-2.5 py-1 rounded-full tabular-nums shrink-0">
+              Sisa Dana: {formatRupiah(poolTotalIdr)}
             </span>
           </div>
 
           {commodityStats.length === 0 ? (
-            <p className="py-6 text-center text-xs text-zinc-500">
-              Belum ada alokasi komoditas yang tercatat.
+            <p className="py-6 text-center text-sm text-ink-muted">
+              Belum ada paket dibagikan.
             </p>
           ) : (
             <div className="space-y-4">
@@ -204,21 +234,21 @@ export default function ReportsComplianceTab({
                 const pct = Math.round((item.totalIdr / maxCommodityIdr) * 100);
                 return (
                   <div key={item.name} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-800 dark:text-zinc-200 font-medium">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-ink-primary font-semibold">
                         {item.name}
                       </span>
-                      <span className="font-mono text-zinc-500 dark:text-zinc-400 tabular-nums">
-                        {item.count}× ·{" "}
-                        <span className="text-zinc-900 dark:text-zinc-100">
+                      <span className="font-mono text-xs text-ink-secondary tabular-nums shrink-0">
+                        {item.count} kupon ·{" "}
+                        <strong className="text-ink-primary">
                           {formatRupiah(item.totalIdr)}
-                        </span>
+                        </strong>
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800/90 rounded-full overflow-hidden">
+                    <div className="w-full h-2.5 bg-nested rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-zinc-900 dark:bg-zinc-200 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.max(6, pct)}%` }}
+                        className="h-full bg-cta-bg rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(8, pct)}%` }}
                       />
                     </div>
                   </div>
@@ -228,24 +258,24 @@ export default function ReportsComplianceTab({
           )}
         </div>
 
-        <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 p-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-card rounded-2xl border border-line/75 shadow-sm p-5">
+          <div className="flex items-start justify-between gap-2 mb-5">
             <div>
-              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                Omzet &amp; Pencairan Warung Mitra
-              </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Perbandingan dana cair vs. saldo menunggu pencairan
+              <h2 className="text-base font-bold text-ink-primary">
+                Transaksi &amp; Pencairan Kedai
+              </h2>
+              <p className="text-xs text-ink-secondary mt-0.5">
+                Uang sudah cair dibanding yang belum cair
               </p>
             </div>
-            <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
-              {settlementBatches.length} Batch
+            <span className="font-mono text-xs font-semibold text-ink-secondary bg-nested px-2.5 py-1 rounded-full tabular-nums shrink-0">
+              {settlementBatches.length} Pencairan
             </span>
           </div>
 
           {merchants.length === 0 ? (
-            <p className="py-6 text-center text-xs text-zinc-500">
-              Belum ada warung mitra yang terdaftar.
+            <p className="py-6 text-center text-sm text-ink-muted">
+              Belum ada kedai terdaftar.
             </p>
           ) : (
             <div className="space-y-4">
@@ -254,39 +284,47 @@ export default function ReportsComplianceTab({
                 const settledPct =
                   maxMerchantTurnover > 0
                     ? Math.round(
-                        (m.total_settled_idr / maxMerchantTurnover) * 100
-                      )
+                      (m.total_settled_idr / maxMerchantTurnover) * 100
+                    )
                     : 0;
                 const pendingPct =
                   maxMerchantTurnover > 0
                     ? Math.round(
-                        (m.unsettled_balance_idr / maxMerchantTurnover) * 100
-                      )
+                      (m.unsettled_balance_idr / maxMerchantTurnover) * 100
+                    )
                     : 0;
                 return (
                   <div key={m.id} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-800 dark:text-zinc-200 font-medium truncate pr-2">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-ink-primary font-semibold truncate">
                         {m.name}
                       </span>
-                      <span className="font-mono text-zinc-800 dark:text-zinc-300 tabular-nums whitespace-nowrap">
+                      <span className="font-mono text-xs font-bold text-ink-primary tabular-nums whitespace-nowrap">
                         {formatRupiah(total)}
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800/90 rounded-full overflow-hidden flex">
+                    <div className="w-full h-2.5 bg-nested rounded-full overflow-hidden flex">
                       <div
-                        className="h-full bg-zinc-900 dark:bg-zinc-200 transition-all duration-500"
+                        className="h-full bg-cta-bg transition-all duration-500"
                         style={{ width: `${settledPct}%` }}
                       />
                       <div
-                        className="h-full bg-zinc-400 dark:bg-zinc-500 transition-all duration-500"
+                        className="h-full bg-amberTech transition-all duration-500"
                         style={{ width: `${pendingPct}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-zinc-500 tabular-nums">
-                      <span>Sudah Cair {formatRupiah(m.total_settled_idr)}</span>
+                    <div className="flex items-center justify-between text-xs text-ink-muted tabular-nums">
                       <span>
-                        Menunggu {formatRupiah(m.unsettled_balance_idr)}
+                        Sudah Cair:{" "}
+                        <span className="text-emeraldTech font-mono font-semibold">
+                          {formatRupiah(m.total_settled_idr)}
+                        </span>
+                      </span>
+                      <span>
+                        Belum Cair:{" "}
+                        <span className="text-amberTech font-mono font-semibold">
+                          {formatRupiah(m.unsettled_balance_idr)}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -297,112 +335,99 @@ export default function ReportsComplianceTab({
         </div>
       </div>
 
-      {/* Arsitektur Sistem & Keterbukaan Ruang Lingkup STACK 2026 */}
-      <div className="bg-white dark:bg-[#111113] rounded-xl border border-zinc-200 dark:border-zinc-800/90 overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      {/* Catatan Ruang Lingkup STACK 2026 */}
+      <div className="bg-card rounded-2xl border border-line/75 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-line/50 bg-surface/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              Arsitektur Sistem &amp; Keterbukaan Ruang Lingkup
-            </h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <h2 className="text-base font-bold text-ink-primary">
+              Info Sistem &amp; Batasan Demo (STACK 2026)
+            </h2>
+            <p className="text-xs text-ink-secondary mt-0.5">
               Tim Run.exe (Amos Belsing Arta Baringbing, Jessica Ruth, Jonathan
-              Pasaribu) · STACK 2026 Kasus 2
+              Pasaribu) · Kasus 2
             </p>
           </div>
-          <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-md self-start sm:self-auto">
+          <span className="font-mono text-xs font-semibold text-emeraldTech bg-emeraldTech/12 px-3 py-1 rounded-full self-start sm:self-auto">
             {engineLabel}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-200 dark:divide-zinc-800/80 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line/50 text-xs">
           <div className="p-5 space-y-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-600 dark:text-zinc-400">
-              Prototipe Terimplementasi
+            <p className="font-bold text-emeraldTech uppercase tracking-wider">
+              Yang Sudah Dibuat
             </p>
-            <ul className="space-y-2 text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            <ul className="space-y-2 text-ink-secondary leading-relaxed">
               <li>
-                Registrasi warga penerima manfaat &amp; warung mitra, serta
-                penerbitan voucher bertanda tangan HMAC-SHA256 dengan nonce
-                unik.
+                Login per peran (Pengurus, Pemilik Kedai, Warga), daftar akun,
+                ganti sandi, dan reset sandi dengan kode OTP 6 angka (hash{" "}
+                <code>scrypt</code> + cookie sesi HMAC).
               </li>
               <li>
-                Kartu voucher dual-kanal: QR dinamis untuk pengguna smartphone
-                dan kode 6-karakter SMS / cetak untuk lansia.
+                Data 20 penerima bansos wilayah Toba, 4 kedai mitra, pembuatan
+                kupon bertanda tangan HMAC-SHA256, QR, kode kertas, dan tombol
+                Huruf Besar.
               </li>
               <li>
-                Terminal POS Warung berkemampuan offline memakai Web Crypto API
-                (
-                <span className="font-mono text-zinc-800 dark:text-zinc-300">
-                  crypto.subtle
-                </span>
-                ) dan antrean{" "}
-                <span className="font-mono text-zinc-800 dark:text-zinc-300">
-                  IndexedDB
-                </span>
-                .
+                Kasir Kedai offline (Web Crypto API + IndexedDB) dengan
+                penolakan kupon palsu dan kupon ganda.
               </li>
               <li>
-                REST API Golang + skema PostgreSQL dengan rekonsiliasi konflik
-                di sisi server, buku besar rantai hash SHA-256, dan ekspor
-                CSV/JSON.
+                Backend Golang + skema PostgreSQL, catatan berantai SHA-256, dan
+                ekspor CSV/JSON.
               </li>
             </ul>
           </div>
 
           <div className="p-5 space-y-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-600 dark:text-zinc-400">
-              Simulasi &amp; Keterbatasan
+            <p className="font-bold text-amberTech uppercase tracking-wider">
+              Batasan Simulasi
             </p>
-            <ul className="space-y-2 text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            <ul className="space-y-2 text-ink-secondary leading-relaxed">
               <li>
-                <span className="text-zinc-900 dark:text-zinc-200 font-medium">
-                  Data Sintetis:
-                </span>{" "}
-                Profil warga (WGA-0401–0404) dan warung (WRG-01–03) adalah data
-                demonstrasi sintetis.
+                <strong className="text-ink-primary">Data Contoh:</strong> 20
+                nama penerima (WGA-0401 s/d WGA-0420) dan 4 kedai adalah data
+                simulasi untuk demo.
               </li>
               <li>
-                <span className="text-zinc-900 dark:text-zinc-200 font-medium">
-                  Jalur Pencairan Simulasi:
-                </span>{" "}
-                Batch pencairan menghasilkan struk SHA-256 tanpa melakukan
-                transfer bank BI-FAST / QRIS sungguhan.
+                <strong className="text-ink-primary">OTP Lokal:</strong> Kode
+                OTP 6 angka ditampilkan di layar simulasi karena belum memakai
+                layanan SMS berbayar.
               </li>
               <li>
-                <span className="text-zinc-900 dark:text-zinc-200 font-medium">
-                  Kunci Rahasia Bersama:
-                </span>{" "}
-                Verifikasi offline di browser saat ini masih memakai kunci
-                bersama HMAC tingkat RW.
+                <strong className="text-ink-primary">
+                  Pencairan Simulasi:
+                </strong>{" "}
+                Pencairan kedai mencatat struk di sistem tanpa transfer uang
+                sungguhan.
               </li>
             </ul>
           </div>
 
           <div className="p-5 space-y-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-zinc-600 dark:text-zinc-400">
-              Rencana Tugas Final Day
+            <p className="font-bold text-ink-primary uppercase tracking-wider">
+              Rencana Tahap Final
             </p>
-            <ul className="space-y-2 text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            <ul className="space-y-2 text-ink-secondary leading-relaxed">
               <li>
-                <span className="text-zinc-900 dark:text-zinc-200 font-medium">
-                  1. Tanda Tangan Asimetris Ed25519:
-                </span>{" "}
-                Mengganti kunci HMAC bersama menjadi verifikasi kunci publik
-                Ed25519 agar browser warung tidak menyimpan kunci penandatangan.
+                <strong className="text-ink-primary">
+                  1. Kunci Publik Ed25519:
+                </strong>{" "}
+                Mengganti kunci bersama menjadi verifikasi kunci publik di
+                perangkat kedai.
               </li>
               <li>
-                <span className="text-zinc-900 dark:text-zinc-200 font-medium">
-                  2. Autentikasi &amp; Otorisasi Perangkat:
-                </span>{" "}
-                Menambahkan login JWT koordinator serta pendaftaran dan daftar
-                pencabutan perangkat warung resmi.
+                <strong className="text-ink-primary">
+                  2. Pengiriman SMS / WA:
+                </strong>{" "}
+                Kirim kode kupon dan OTP langsung ke nomor HP penerima.
               </li>
               <li>
-                <span className="text-zinc-900 dark:text-zinc-200 font-medium">
-                  3. Pengiriman SMS &amp; Penyempurnaan UX:
-                </span>{" "}
-                Integrasi webhook pengiriman slip SMS otomatis dan penyempurnaan
-                antarmuka dari uji coba lapangan.
+                <strong className="text-ink-primary">
+                  3. Database Akun Terpusat:
+                </strong>{" "}
+                Menyatukan penyimpanan akun pengguna ke PostgreSQL di Golang
+                API.
               </li>
             </ul>
           </div>

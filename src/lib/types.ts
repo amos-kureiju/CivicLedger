@@ -165,3 +165,18 @@ export interface ClearinghouseState {
   commodity_catalog: CommodityItem[];
   backend_engine: BackendEngineType;
 }
+
+export type AuthRole = "COORDINATOR" | "MERCHANT" | "BENEFICIARY";
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: AuthRole;
+  role_label: string;
+  rt_rw: string;
+  linked_merchant_id?: string;
+  linked_beneficiary_id?: string;
+}
+

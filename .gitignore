@@ -6,12 +6,14 @@ node_modules/
 # Next.js build output
 .next/
 out/
+*.tsbuildinfo
 
 # Go build binaries & local runtime state
 backend/civicledger-api
 backend/civicledger-api.exe
 backend/.civicledger-go-state.json
 .civicledger-ledger.json
+.civicledger-auth.json
 
 # Environment & secrets (STACK 2026 compliance: never commit secrets)
 .env

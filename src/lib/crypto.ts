@@ -107,7 +107,7 @@ export async function verifyLedgerChainWebCrypto(
       valid: true,
       checked_count: 0,
       head_hash: GENESIS_HASH,
-      message: "Buku besar masih kosong; jangkar hash genesis utuh.",
+      message: "Belum ada transaksi yang tercatat.",
     };
   }
 
@@ -120,7 +120,7 @@ export async function verifyLedgerChainWebCrypto(
         checked_count: entries.length - i,
         head_hash: entries[0].tx_hash,
         broken_at_id: e.id,
-        message: `Terdeteksi pemutusan rantai hash pada transaksi ${e.id}.`,
+        message: `Urutan catatan tidak cocok pada transaksi ${e.id}.`,
       };
     }
     const payload = `${e.prev_hash}|${e.voucher_id}|${e.merchant_id}|${e.nominal_idr}|${e.timestamp}|${e.hmac_signature}`;
@@ -131,7 +131,7 @@ export async function verifyLedgerChainWebCrypto(
         checked_count: entries.length - i,
         head_hash: entries[0].tx_hash,
         broken_at_id: e.id,
-        message: `Terdeteksi manipulasi isi payload pada transaksi ${e.id}.`,
+        message: `Data pada transaksi ${e.id} terdeteksi berubah.`,
       };
     }
     expectedPrev = e.tx_hash;
@@ -141,7 +141,7 @@ export async function verifyLedgerChainWebCrypto(
     valid: true,
     checked_count: entries.length,
     head_hash: entries[0].tx_hash,
-    message: `Seluruh ${entries.length} transaksi buku besar terverifikasi utuh dari genesis hingga blok terbaru tanpa manipulasi.`,
+    message: `Hasil cek aman. Seluruh ${entries.length} transaksi sesuai dan belum pernah diubah.`,
   };
 }
 

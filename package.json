@@ -9,7 +9,10 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "backend": "cd backend && go run .",
-    "backend:test": "cd backend && go test -v ./..."
+    "backend:test": "cd backend && go test -v ./...",
+    "mobile": "npm --prefix mobile start",
+    "mobile:tunnel": "npm --prefix mobile run tunnel",
+    "mobile:web": "npm --prefix mobile run web"
   },
   "dependencies": {
     "lucide-react": "^0.460.0",

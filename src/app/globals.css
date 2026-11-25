@@ -4,20 +4,70 @@
 
 :root {
   color-scheme: light;
+  /* Palet Hangat Gotong Royong — Ramah Keluarga, Orang Tua & Warung */
+  --bg-canvas: 250 247 242; /* #FAF7F2 Warm Ivory Cream */
+  --bg-surface: 255 253 249; /* #FFFDF9 Soft Warm White */
+  --bg-card: 255 255 255; /* #FFFFFF Clean Card White */
+  --bg-nested: 243 236 225; /* #F3ECE1 Warm Sand */
+  --bg-elevated: 235 227 213; /* #EBE3D5 Soft Linen */
+  --bg-highest: 224 214 198; /* #E0D6C6 Warm Hover */
+  --border-line: 217 207 192; /* #D9CFC0 Gentle Warm Stone */
+  --ink-primary: 29 38 34; /* #1D2622 Deep Forest Charcoal */
+  --ink-body: 51 63 57; /* #333F39 Warm Slate */
+  --ink-secondary: 82 95 89; /* #525F59 Readable Earth Gray */
+  --ink-muted: 109 120 114; /* #6D7872 Soft Stone Gray */
+  --cta-bg: 27 107 80; /* #1B6B50 Deep Pandan Leaf Green */
+  --cta-ink: 255 255 255; /* #FFFFFF Pure White */
+  --accent-emerald: 21 115 84; /* #157354 Fresh Harvest Green */
+  --accent-emerald-bg: 22 138 99; /* #168A63 */
+  --accent-amber: 194 103 29; /* #C2671D Warm Terracotta Amber */
+  --accent-rose: 196 54 58; /* #C4363A Clear Coral Red */
 }
 
 html.dark {
   color-scheme: dark;
+  /* Mode Malam Nyaman — Warm Forest Slate */
+  --bg-canvas: 20 25 23; /* #141917 Warm Deep Forest */
+  --bg-surface: 24 30 27; /* #181E1B */
+  --bg-card: 29 36 33; /* #1D2421 Cozy Slate Card */
+  --bg-nested: 37 46 42; /* #252E2A Soft Pine Tint */
+  --bg-elevated: 46 58 53; /* #2E3A35 */
+  --bg-highest: 58 72 66; /* #3A4842 */
+  --border-line: 68 84 77; /* #44544D */
+  --ink-primary: 247 244 239; /* #F7F4EF Warm Cream White */
+  --ink-body: 226 222 215; /* #E2DED7 */
+  --ink-secondary: 184 191 186; /* #B8BFBA */
+  --ink-muted: 142 153 147; /* #8E9993 */
+  --cta-bg: 78 212 158; /* #4ED49E Fresh Mint Leaf */
+  --cta-ink: 15 36 28; /* #0F241C Deep Forest Ink */
+  --accent-emerald: 82 214 162; /* #52D6A2 */
+  --accent-emerald-bg: 27 156 112; /* #1B9C70 */
+  --accent-amber: 246 183 86; /* #F6B756 Warm Honey */
+  --accent-rose: 249 148 148; /* #F99494 Soft Coral */
+}
+
+html {
+  font-size: 16px;
+}
+
+/* Mode Huruf Besar — Aksesibilitas khusus Orang Tua / Lansia */
+html.text-large {
+  font-size: 18px;
 }
 
 body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overscroll-behavior: none;
 }
 
-/* Subtle monochrome scrollbars */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle warm scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -25,16 +75,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
-  border-radius: 3px;
+  background: rgba(109, 120, 114, 0.32);
+  border-radius: 999px;
 }
 
-html.dark ::-webkit-scrollbar-thumb {
-  background: #27272a;
-}
-
-html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(109, 120, 114, 0.55);
 }
 
 @media print {
@@ -43,6 +89,6 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   }
   body {
     background: #ffffff !important;
-    color: #09090b !important;
+    color: #1d2622 !important;
   }
 }

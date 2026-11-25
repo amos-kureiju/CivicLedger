@@ -175,13 +175,13 @@ export async function POST(req: NextRequest) {
         );
       }
       const newBen = {
-        id: `WGA-04${state.beneficiaries.length + 10}`,
+        id: `WGA-04${state.beneficiaries.length + 1}`,
         name: String(name).trim(),
         rt_rw: String(rt_rw).trim(),
-        category: category || "Keluarga Rentan Terverifikasi",
-        phone: phone || "0812-0000-1111 (SMS / Web Ponsel)",
+        category: category || "Keluarga Kurang Mampu",
+        phone: phone || "0812-6300-0000",
         household_size: Number(household_size) || 3,
-        verified_by: "Koordinator RT 04 — Pak H. Dedi",
+        verified_by: "St. Darwin Pasaribu",
       };
       state.beneficiaries.push(newBen);
       saveClearinghouseState(state);
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
       const { name, owner, rt_rw, bank_account } = body;
       if (!name || !owner) {
         return NextResponse.json(
-          { error: "Nama warung dan nama pemilik wajib diisi." },
+          { error: "Nama kedai dan nama pemilik wajib diisi." },
           { status: 400 }
         );
       }
@@ -201,8 +201,8 @@ export async function POST(req: NextRequest) {
         id: `WRG-${nextNum}`,
         name: String(name).trim(),
         owner: String(owner).trim(),
-        rt_rw: String(rt_rw || "RT 04 / RW 08 Coblong, Bandung").trim(),
-        bank_account: String(bank_account || "QRIS Warung Mikro •• 0000").trim(),
+        rt_rw: String(rt_rw || "Laguboti, Kab. Toba").trim(),
+        bank_account: String(bank_account || "BRI / QRIS •• 0000").trim(),
         unsettled_balance_idr: 0,
         total_settled_idr: 0,
         redemption_count: 0,
@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
         saveClearinghouseState(state);
         return NextResponse.json(
           {
-            error: `Ditolak (Anti-Double-Spend): Voucher ${voucher.short_code} sudah berstatus ${voucher.status} (telah ditukar di ${voucher.redeemed_by_merchant_name || "warung mitra lain"}).`,
+            error: `Kupon ${voucher.short_code} sudah pernah dipakai sebelumnya di ${voucher.redeemed_by_merchant_name || "warung mitra lain"}, jadi tidak bisa ditukar lagi.`,
           },
           { status: 409 }
         );
@@ -291,7 +291,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Verifikasi kriptografi gagal: tanda tangan HMAC-SHA256 tidak cocok (indikasi manipulasi payload).",
+              "Kupon ditolak karena kode pengamannya tidak cocok (indikasi kupon palsu atau diubah).",
           },
           { status: 403 }
         );
@@ -409,7 +409,7 @@ export async function POST(req: NextRequest) {
         if (voucher.status !== "ACTIVE") {
           recordConflict(
             "DUPLICATE_CONFLICT",
-            `Ditolak (Anti-Double-Spend): Voucher ${voucher.short_code} sudah berstatus ${voucher.status} (sebelumnya ditukar di ${voucher.redeemed_by_merchant_name || "warung mitra lain"}).`
+            `Kupon ${voucher.short_code} ditolak karena sebelumnya sudah pernah ditukar di ${voucher.redeemed_by_merchant_name || "warung mitra lain"}.`
           );
           continue;
         }
@@ -476,7 +476,7 @@ export async function POST(req: NextRequest) {
         state.ledger.unshift(entry);
 
         const okReason =
-          "Penukaran offline divalidasi dan dicatat ke buku besar rantai hash SHA-256.";
+          "Penukaran dari mode offline sudah dicek keasliannya dan berhasil masuk ke catatan pusat.";
         state.reconciliation_logs.unshift({
           id: `REC-${crypto.randomBytes(3).toString("hex").toUpperCase()}`,
           client_tx_id: ctxId,
