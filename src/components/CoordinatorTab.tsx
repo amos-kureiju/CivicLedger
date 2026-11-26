@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import { CheckCircle2, RefreshCw } from "lucide-react";
 import {
   ChevronDown,
@@ -28,6 +27,8 @@ import { formatRupiah } from "@/lib/formatters";
 import CoordinatorAnalytics from "./CoordinatorAnalytics";
 import styles from "./CoordinatorWorkspace.module.css";
 import CoordinatorOverview from "./CoordinatorOverview";
+import OperationalCalendar, { type CalendarAvailability } from "./OperationalCalendar";
+import type { CalendarRecords } from "@/lib/calendar-activities";
 import overview from "./CoordinatorOverview.module.css";
 import CoordinatorResources, { type ResourceView } from "./CoordinatorResources";
 import resourceStyles from "./CoordinatorResources.module.css";
@@ -60,6 +61,9 @@ function MetricValue({ value, currency = false }: { value: number; currency?: bo
 }
 
 interface CoordinatorTabProps {
+  calendarRecords: Omit<CalendarRecords, "vouchers" | "ledger">;
+  calendarAvailability: CalendarAvailability;
+  deviceOnline: boolean;
   pendingSync: number;
   ledger: LedgerEntry[];
   onReports: () => void;
@@ -124,6 +128,9 @@ interface CoordinatorTabProps {
 
 export default function CoordinatorTab({
   pendingSync,
+  calendarRecords,
+  calendarAvailability,
+  deviceOnline,
   ledger,
   onReports,
   lang,
@@ -181,6 +188,7 @@ export default function CoordinatorTab({
   onNotifySelectedBeneficiary,
 }: CoordinatorTabProps) {
   const en = lang === "en";
+  const [calendarVoucher, setCalendarVoucher] = React.useState<Voucher | null>(null);
   const creationDrawer = React.useRef<HTMLDialogElement>(null);
   const [creation, setCreation] = React.useState<ResourceView | "FUNDS">("VOUCHERS");
   function openCreation(view: ResourceView | "FUNDS") {
@@ -223,11 +231,8 @@ export default function CoordinatorTab({
             <div className={overview.heroCopy}>
               <h1>{en ? "Hello," : "Halo,"} <em>{currentUser.name}!</em></h1>
               <p>{en ? "Manage social aid, voucher distribution, and partner store activity with ease." : "Kelola bantuan sosial, distribusi kupon, dan aktivitas kedai mitra dengan lebih mudah."}</p>
-              <button id="coordinator-issue-trigger" type="button" onClick={() => openCreation("VOUCHERS")}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
             </div>
-            <div className={overview.art} aria-hidden="true">
-              <Image src="/images/auth/civicledger-showcase.webp" alt="" fill sizes="(max-width: 640px) 42vw, 350px" />
-            </div>
+            <button id="coordinator-issue-trigger" type="button" onClick={() => openCreation("VOUCHERS")}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
           </header>
           <section className={overview.metrics} id="coordinator-metrics" aria-label={en ? "Operational summary" : "Ringkasan operasional"}>
             {[
@@ -247,7 +252,8 @@ export default function CoordinatorTab({
           </section>
           <CoordinatorAnalytics vouchers={vouchers} ledger={ledger} turnover={totalWarungTurnover} merchantCount={merchants.length} en={en} onReports={onReports} />
         </div>
-        <CoordinatorOverview en={en} vouchers={vouchers} beneficiaries={beneficiaries} merchants={merchants} ledger={ledger} pending={pendingSync}
+        <CoordinatorOverview en={en} vouchers={vouchers} beneficiaries={beneficiaries} merchants={merchants} pending={pendingSync}
+          calendar={<OperationalCalendar en={en} availability={calendarAvailability} offline={isOfflineMode || !deviceOnline} records={{ ...calendarRecords, vouchers, ledger }} onVoucher={setCalendarVoucher} />}
           onVoucher={onOpenVoucherCard} onResource={(view) => {
             setCoordinatorRightView(view);
             onFullResources();
@@ -255,7 +261,7 @@ export default function CoordinatorTab({
           }} />
       </div>
 
-      <CoordinatorResources en={en} view={coordinatorRightView} onView={setCoordinatorRightView} preview={!fullResources} onFullView={onFullResources}
+      <CoordinatorResources requestedVoucher={calendarVoucher} clearRequestedVoucher={() => setCalendarVoucher(null)} en={en} view={coordinatorRightView} onView={setCoordinatorRightView} preview={!fullResources} onFullView={onFullResources}
         vouchers={vouchers} beneficiaries={beneficiaries} filteredVouchers={filteredVouchers} filteredBeneficiaries={filteredBeneficiaries} merchants={merchants} packages={catalog}
         voucherQuery={voucherSearch} onVoucherQuery={setVoucherSearch} beneficiaryQuery={beneficiarySearch} onBeneficiaryQuery={setBeneficiarySearch} status={voucherStatusFilter} onStatus={setVoucherStatusFilter}
         onAdd={openCreation} onPrint={onOpenVoucherCard} onSms={onCopyVoucherSms}

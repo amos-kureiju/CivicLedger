@@ -1,4 +1,4 @@
-.resources { min-width: 0; background: rgb(var(--bg-card)); border: 1px solid var(--line-soft); border-radius: 18px; box-shadow: var(--panel-shadow); }
+.resources { min-width: 0; background: rgb(var(--bg-card)); border: 1px solid var(--line-soft); border-radius: 12px; box-shadow: var(--panel-shadow); }
 .header { display: flex; justify-content: space-between; align-items: center; gap: .65rem; padding: .9rem 1rem .55rem; }
 .header h2 { font-size: 1.25rem; }
 .tabs { display: flex; flex-wrap: wrap; gap: .2rem .7rem; padding: 0 .85rem; border-bottom: 1px solid var(--line-soft); }
@@ -41,15 +41,15 @@
 .pagination, .pagination > div { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
 .pagination { justify-content: space-between; padding: .5rem 1rem; font-size: .76rem; }
 .pagination button:disabled { opacity: .4; }
-.actions { position: fixed; inset: auto; margin: 0; width: 184px; padding: .35rem; border: 1px solid var(--line-soft); border-radius: 10px; color: rgb(var(--ink-primary)); background: rgb(var(--bg-card)); box-shadow: 0 8px 28px #202b3940; }
+.actions { position: fixed; inset: auto; margin: 0; width: 184px; padding: .35rem; border: 1px solid var(--line-soft); border-radius: 10px; color: rgb(var(--ink-primary)); background: rgb(var(--bg-card)); box-shadow: 0 3px 10px #202b3924; }
 .actions:popover-open { animation: into-view 180ms ease-out both; }
 .actions button { display: block; width: 100%; text-align: start; padding: .55rem .65rem; font-size: .82rem; border-radius: 6px; }
 .actions button:hover { background: rgb(var(--bg-nested)); }
 .detail { width: min(100%, 28rem); }
-.ticket { position: relative; color: white; background: linear-gradient(145deg, #dd3a31, #a61e17); border-radius: 14px; padding: 1rem; margin-bottom: .7rem; box-shadow: inset 0 0 0 1px #ffffff30, 0 8px 22px #ac2e253a; }
+.ticket { position: relative; color: white; background: #b82a23; border-radius: 14px; padding: 1rem; margin-bottom: .7rem; box-shadow: var(--panel-shadow); }
 .ticket :is(small,strong,code) { display: block; }
 .ticket small { margin-top: .55rem; }
-.ticket strong { font-family: "Clash Display", Manrope, sans-serif; font-size: 1.9rem; }
+.ticket strong { font-family: var(--font-coordinator-sora), var(--font-inter), sans-serif; font-size: 1.9rem; }
 .ticket code { border-top: 1px dashed #ffffff70; margin-top: .45rem; padding-top: .45rem; letter-spacing: .05em; }
 .details { font-size: .84rem; }
 .details > div { display: grid; grid-template-columns: minmax(7rem, .85fr) minmax(0, 1.2fr); gap: .6rem; padding: .52rem 0; border-bottom: 1px solid var(--line-soft); }

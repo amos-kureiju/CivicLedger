@@ -1,11 +1,11 @@
 .metrics, .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
-.metrics article, .card { min-width: 0; border: 1px solid var(--line-soft); border-radius: 22px; padding: clamp(1rem, 1.45vw, 1.35rem); background: rgb(var(--bg-card)); box-shadow: inset 0 1px #fff2, 0 10px 22px #2942650d, 0 2px 6px #2942650b; animation: bento-in 650ms cubic-bezier(.22, 1, .36, 1) both; transition: box-shadow 240ms ease, translate 240ms ease; }
-.metrics article:hover, .card:hover { translate: 0 -2px; box-shadow: inset 0 1px #fff2, 0 14px 24px #29426519, 0 2px 6px #2942650b; }
+.metrics article, .card { min-width: 0; border: 1px solid var(--line-soft); border-radius: 14px; padding: clamp(1rem, 1.45vw, 1.35rem); background: rgb(var(--bg-card)); box-shadow: var(--panel-shadow); animation: bento-in 650ms cubic-bezier(.22, 1, .36, 1) both; transition: box-shadow 240ms ease, translate 240ms ease; }
+.metrics article:hover, .card:hover { translate: 0 -1px; box-shadow: 0 2px 6px #202b3912; }
 .metrics .balance { grid-column: span 4; display: grid; grid-template-rows: auto 1fr auto; gap: .7rem; background: radial-gradient(ellipse at 104% -10%, #f044382d, transparent 61%), rgb(var(--bg-card)); }
 .balance header { display: flex; align-items: center; gap: .55rem; }
 .balance .icon { color: var(--red); background: #f0443820; }
-.metrics h2, .metrics h3 { font-size: .89rem; font-family: Manrope, var(--font-inter), sans-serif; font-weight: 800; letter-spacing: 0; }
-.metrics strong, .spending strong, .ring strong, .trackTotals strong { font-family: "Clash Display", Manrope, sans-serif; font-weight: 600; line-height: 1.12; font-variant-numeric: tabular-nums; }
+.metrics h2, .metrics h3 { font-size: .89rem; font-family: var(--font-inter), sans-serif; font-weight: 800; letter-spacing: 0; }
+.metrics strong, .spending strong, .ring strong, .trackTotals strong { font-family: var(--font-coordinator-sora), var(--font-inter), sans-serif; font-weight: 600; line-height: 1.12; font-variant-numeric: tabular-nums; }
 .balance strong { font-size: clamp(1.65rem, 2.75vw, 2.65rem); overflow-wrap: anywhere; }
 .balance button { justify-self: start; display: inline-flex; align-items: center; gap: .4rem; font-weight: 800; font-size: .78rem; color: var(--red); border-radius: 9px; padding: .32rem .45rem; margin-inline-start: -.45rem; }
 .balance button:hover { background: #f0443817; }
@@ -23,7 +23,7 @@
 .monthly { grid-area: monthly; animation-delay: 160ms; }
 .spending { grid-area: spending; animation-delay: 235ms; }
 .feature { grid-area: feature; animation-delay: 310ms; }
-.card h3 { font-family: "Clash Display", Manrope, sans-serif; font-weight: 600; font-size: clamp(1rem, 1.25vw, 1.18rem); line-height: 1.2; }
+.card h3 { font-family: var(--font-coordinator-sora), var(--font-inter), sans-serif; font-weight: 600; font-size: clamp(1rem, 1.25vw, 1.18rem); line-height: 1.2; }
 .cardHead { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .45rem; }
 .cardHead :is(select,button) { display: inline-flex; align-items: center; gap: .28rem; font-size: .73rem; padding: .36rem .55rem; border-radius: .65rem; background: rgb(var(--bg-nested)); font-weight: 700; }
 .ring { width: min(100%, 10.1rem); margin: .25rem auto; display: grid; place-items: center; position: relative; }
@@ -43,7 +43,7 @@
 .barGrid { gap: .28rem; height: 7.6rem; background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), var(--line-soft) calc(25% - 1px) 25%); }
 .barColumn { display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .barColumn button { width: 100%; flex: 1; min-height: 0; display: flex; align-items: end; justify-content: center; position: relative; border-radius: 7px; }
-.barColumn button i { width: 70%; max-width: 2.45rem; border-radius: 7px 7px 2px 2px; background: linear-gradient(#8dc7ec, #d8efff); transform-origin: bottom; animation: bars-in 560ms var(--bar-delay) ease-out both; }
+.barColumn button i { width: 70%; max-width: 2.45rem; border-radius: 7px 7px 2px 2px; background: #a9d9f7; transform-origin: bottom; animation: bars-in 560ms var(--bar-delay) ease-out both; }
 .barColumn button i[data-empty="true"] { visibility: hidden; }
 .barColumn button:hover i { background: #63b0dd; }
 .barColumn small { font-size: .62rem; color: rgb(var(--ink-secondary)); white-space: nowrap; background: rgb(var(--bg-card)); }
@@ -51,9 +51,9 @@
 .barColumn button:is(:hover, :focus) .tooltip { display: block; }
 .barColumn:first-child .tooltip { left: 0; transform: none; }
 .barColumn:last-child .tooltip { right: 0; left: auto; transform: none; }
-.spending { display: flex; align-items: center; gap: .8rem; background: radial-gradient(ellipse at 100% -38%, rgb(var(--bg-elevated)), transparent 70%), rgb(var(--bg-card)); }
+.spending { display: flex; align-items: center; gap: .8rem; background: rgb(var(--bg-card)); }
 .spending strong { display: block; font-size: clamp(1.3rem, 1.75vw, 1.8rem); margin: .2rem 0; overflow-wrap: anywhere; }
-.card.feature { color: #f7fbff; background: radial-gradient(ellipse at 100% 0%, #30516e80, transparent 64%), linear-gradient(145deg, #202b39, #172333); border-color: #4e6983; box-shadow: inset 0 1px #ffffff22, 0 12px 24px #192d4838; overflow: hidden; }
+.card.feature { color: #f7fbff; background: #202b39; border-color: #40516a; box-shadow: var(--panel-shadow); overflow: hidden; }
 .card.feature h3 { color: #f7fbff; }
 .card.feature p { color: #c2d5e8; }
 .feature button { background: #a9d9f720; color: #f7fbff; }
@@ -97,6 +97,6 @@
 .spending > div { min-width: 0; flex: 1; }
 .storeChart { display: grid; gap: .45rem; margin-top: .55rem; }
 .storeChart li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .12rem .4rem; }
-.storeChart span,.storeChart li strong { font: 700 .67rem/1.25 Manrope,sans-serif; margin: 0; overflow-wrap: anywhere; }
+.storeChart span,.storeChart li strong { font: 700 .67rem/1.25 var(--font-inter), sans-serif; margin: 0; overflow-wrap: anywhere; }
 .storeChart i { grid-column: 1 / -1; height: 4px; border-radius: 9px; background: #8dc7ec; transform-origin: left; animation: store-in 550ms ease-out both; }
 @keyframes store-in { from { transform: scaleX(0); } }

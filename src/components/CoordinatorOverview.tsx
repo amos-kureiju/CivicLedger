@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { ArrowUpRight, Clock3, Store, Ticket, Users, WifiOff } from "lucide-react";
+import { ArrowUpRight, Store, Ticket, Users, WifiOff } from "lucide-react";
 import { formatRupiah, formatStatusLabel } from "@/lib/formatters";
-import type { Beneficiary, LedgerEntry, Merchant, Voucher } from "@/lib/types";
+import type { Beneficiary, Merchant, Voucher } from "@/lib/types";
+import type { ReactNode } from "react";
 import styles from "./CoordinatorOverview.module.css";
 
 export function getOperationalReminders(vouchers: Voucher[], pending: number, en: boolean, now = Date.now()) {
@@ -18,34 +19,22 @@ export function getOperationalReminders(vouchers: Voucher[], pending: number, en
   ].filter(item => item.count > 0);
 }
 
-export default function CoordinatorOverview({ en, vouchers, beneficiaries, merchants, ledger, pending, onVoucher, onResource }: {
+export default function CoordinatorOverview({ en, vouchers, beneficiaries, merchants, calendar, pending, onVoucher, onResource }: {
   en: boolean;
   vouchers: Voucher[];
   beneficiaries: Beneficiary[];
   merchants: Merchant[];
-  ledger: LedgerEntry[];
+  calendar: ReactNode;
   pending: number;
   onVoucher: (voucher: Voucher) => void;
   onResource: (view: "BENEFICIARIES" | "MERCHANTS") => void;
 }) {
-  const timeZone = "Asia/Jakarta";
-  const day = new Intl.DateTimeFormat("en-CA", { timeZone, dateStyle: "short" });
-  const clock = new Intl.DateTimeFormat(en ? "en" : "id", { timeZone, hour: "2-digit", minute: "2-digit" });
-  const today = day.format(new Date());
-  const activity = [
-    ...vouchers.map(voucher => ({ id: voucher.id, date: Date.parse(voucher.issued_at), type: en ? "Voucher issued" : "Kupon diterbitkan", code: voucher.short_code })),
-    ...ledger.map(entry => ({ id: entry.id, date: Date.parse(entry.timestamp), type: en ? "Voucher redeemed" : "Kupon ditukar", code: entry.short_code })),
-  ].filter(item => Number.isFinite(item.date) && day.format(item.date) === today).sort((a, b) => b.date - a.date);
   const reminders = getOperationalReminders(vouchers, pending, en);
   const recent = [...vouchers].sort((a, b) => Date.parse(b.issued_at) - Date.parse(a.issued_at)).slice(0, 3);
   const activeStores = merchants.filter(merchant => merchant.redemption_count > 0).sort((a, b) => b.redemption_count - a.redemption_count);
   return (
     <aside className={styles.rail} aria-label={en ? "Operations overview" : "Ringkasan operasional tambahan"}>
-      <section className={styles.panel}>
-        <h2><Clock3 size={17} />{en ? "Today's Activity" : "Aktivitas Hari Ini"}</h2>
-        {activity.length ? <ul className={styles.timeline}>{activity.slice(0, 4).map(item => <li key={item.type + item.id}><time dateTime={new Date(item.date).toISOString()}>{clock.format(item.date)}</time><div><strong>{item.type}</strong><code>{item.code}</code></div></li>)}</ul>
-          : <p>{en ? "No voucher activity recorded today." : "Belum ada aktivitas kupon tercatat hari ini."}</p>}
-      </section>
+      {calendar}
 
       <section className={styles.panel} id="coordinator-reminders">
         <h2><WifiOff size={17} />{en ? "Operational Reminders" : "Pengingat Operasional"}</h2>

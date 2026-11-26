@@ -18,6 +18,8 @@ export type ResourceView = (typeof tabs)[number][0];
 type Status = "ALL" | VoucherStatus;
 
 interface Props {
+  requestedVoucher?: Voucher | null;
+  clearRequestedVoucher?: () => void;
   en: boolean;
   view: ResourceView;
   onView: (view: ResourceView) => void;
@@ -69,6 +71,14 @@ export default function CoordinatorResources(props: Props) {
 
   useEffect(() => setPage(1), [view, query, props.status, size]);
   useEffect(() => setSize(preview ? 5 : 10), [preview]);
+
+  const { requestedVoucher, clearRequestedVoucher } = props;
+  useEffect(() => {
+    if (!requestedVoucher) return;
+    setSelected(requestedVoucher);
+    if (!drawer.current?.open) drawer.current?.showModal();
+    clearRequestedVoucher?.();
+  }, [requestedVoucher, clearRequestedVoucher]);
 
   function updateQuery(value: string) {
     if (view === "VOUCHERS") props.onVoucherQuery(value);

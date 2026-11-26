@@ -1,28 +1,14 @@
 "use client";
 
-import React from "react";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Info,
-  Lock,
-  MapPin,
-  Printer,
-  RefreshCw,
-} from "lucide-react";
-import { AuthUser, Beneficiary, Voucher } from "@/lib/types";
-import { AppLang } from "@/lib/i18n";
-import BrandLogo from "@/components/BrandLogo";
-import {
-  formatDateTime,
-  formatRupiah,
-  formatStatusLabel,
-} from "@/lib/formatters";
+import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
+import { ArrowUpRight, Check, ChevronDown, Copy, Info, Lock, MapPin, Printer, RefreshCw, Search, Ticket, UserRound } from "lucide-react";
+import type { AuthUser, Beneficiary, Voucher } from "@/lib/types";
+import type { AppLang } from "@/lib/i18n";
+import { formatDateTime, formatRupiah, formatStatusLabel } from "@/lib/formatters";
+import styles from "./BeneficiaryTab.module.css";
 
 interface BeneficiaryTabProps {
+  className?: string;
   lang: AppLang;
   currentUser: AuthUser;
   beneficiaries: Beneficiary[];
@@ -38,21 +24,60 @@ interface BeneficiaryTabProps {
   setShowVoucherTechDetails: (v: boolean) => void;
   copiedSms: boolean;
   canOpenMerchantPos: boolean;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
   onCopySmsSlip: (v: Voucher) => void;
   onSendToMerchantPos: (v: Voucher) => void;
 }
 
+function VoucherStatus({ status, lang }: { status: Voucher["status"]; lang: AppLang }) {
+  return <span className={styles.badge} data-status={status}><i aria-hidden="true" />{formatStatusLabel(status, lang)}</span>;
+}
+
+function VoucherAmount({ amount }: { amount: number }) {
+  const current = useRef(amount);
+  const [value, setValue] = useState(amount);
+  useEffect(() => {
+    const from = current.current;
+    if (from === amount) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      current.current = amount;
+      setValue(amount);
+      return;
+    }
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const time = Math.min(1, (now - start) / 250);
+      current.current = Math.round(from + (amount - from) * (1 - (1 - time) ** 3));
+      setValue(current.current);
+      if (time < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [amount]);
+  return <strong aria-label={formatRupiah(amount)} data-print-value={formatRupiah(amount)}>{formatRupiah(value)}</strong>;
+}
+
+function tiltVoucher(event: PointerEvent<HTMLDivElement>) {
+  if (event.pointerType !== "mouse" || !window.matchMedia("(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)").matches) return;
+  const card = event.currentTarget;
+  const { left, top, width, height } = card.getBoundingClientRect();
+  const clamp = (value: number) => Math.max(-3, Math.min(3, value));
+  card.style.setProperty("--tilt-x", clamp((.5 - (event.clientY - top) / height) * 6) + "deg");
+  card.style.setProperty("--tilt-y", clamp(((event.clientX - left) / width - .5) * 6) + "deg");
+}
+
 export default function BeneficiaryTab({
+  className,
   lang,
   currentUser,
   beneficiaries,
   walletBeneficiaryId,
   setWalletBeneficiaryId,
-  currentWalletBeneficiary,
+  currentWalletBeneficiary: recipient,
   currentWalletVouchers,
   currentWalletActiveCount,
-  selectedVoucherForQR,
+  selectedVoucherForQR: voucher,
   setSelectedVoucherForQR,
   qrDataUrl,
   showVoucherTechDetails,
@@ -64,398 +89,184 @@ export default function BeneficiaryTab({
   onSendToMerchantPos,
 }: BeneficiaryTabProps) {
   const en = lang === "en";
+  const technicalId = useId();
+  const [recipientQuery, setRecipientQuery] = useState("");
+  const [copyResult, setCopyResult] = useState<{ code: string; ok: boolean } | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const query = recipientQuery.trim().toLocaleLowerCase(lang);
+  const matchingRecipients = query ? beneficiaries.filter(person =>
+    [person.name, person.id, person.rt_rw].some(value => value.toLocaleLowerCase(lang).includes(query))
+  ) : beneficiaries;
+  const selectedRecipient = beneficiaries.find(person => person.id === walletBeneficiaryId);
+  const recipientOptions = selectedRecipient && !matchingRecipients.includes(selectedRecipient)
+    ? [selectedRecipient, ...matchingRecipients]
+    : matchingRecipients;
+  const canSearchRecipients = currentUser.role !== "BENEFICIARY" && beneficiaries.length > 1;
+  const code = voucher?.short_code;
+  const copied = copyResult?.code === code ? copyResult : null;
+
+  useEffect(() => {
+    if (!copyResult) return;
+    const timer = window.setTimeout(() => setCopyResult(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [copyResult]);
+
+  async function copyVoucherCode() {
+    if (!code || copying) return;
+    setCopying(true);
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyResult({ code, ok: true });
+    } catch {
+      setCopyResult({ code, ok: false });
+    } finally {
+      setCopying(false);
+    }
+  }
+
+  async function refreshVouchers() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshFailed(false);
+    try {
+      await onRefresh();
+    } catch {
+      setRefreshFailed(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 gap-3 border-b border-line/55">
+    <div className={`${styles.workspace} ${className ?? ""}`}>
+      <header className={`no-print ${styles.heading}`}>
         <div>
-          <p className="text-xs font-semibold text-emeraldTech">
-            {currentUser.name} · {en ? "Food Vouchers" : "Kupon Sembako"}
-          </p>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary mt-0.5">
-            {en ? "Beneficiary Voucher Slip" : "Kupon Warga"}
-          </h1>
-          <p className="text-sm text-ink-secondary mt-0.5">
-            {en
-              ? "Show this QR on your phone or print the short code slip for non-smartphone residents."
-              : "Tunjukkan QR di layar HP atau bawa kode kupon yang dicetak ke kedai terdekat."}
-          </p>
+          <h1>{en ? "Resident Vouchers" : "Kupon Warga"}</h1>
+          <p>{en ? "Select a voucher to show at the store or print a slip." : "Pilih kupon untuk ditunjukkan di kedai atau dicetak sebagai slip."}</p>
+          {refreshFailed && <p role="status">{en ? "Could not refresh voucher records." : "Data kupon gagal dimuat ulang."}</p>}
         </div>
-
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="no-print self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-card hover:bg-nested text-ink-primary border border-line/70 shadow-sm text-xs font-semibold transition"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-emeraldTech" />
-          {en ? "Refresh" : "Muat Ulang"}
+        <button type="button" onClick={refreshVouchers} disabled={refreshing} aria-busy={refreshing} className={styles.button}>
+          <RefreshCw size={16} className={refreshing ? styles.spinning : undefined} aria-hidden="true" />
+          {refreshing ? (en ? "Refreshing…" : "Memuat…") : (en ? "Refresh" : "Muat Ulang")}
         </button>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="no-print lg:col-span-5 flex flex-col space-y-5">
-          <section className="bg-card border border-line/75 rounded-2xl shadow-sm p-5">
-            <div className="flex items-center justify-between mb-2">
-              <label
-                htmlFor="family-select"
-                className="text-xs font-bold text-ink-primary"
-              >
-                {en ? "Beneficiary Name" : "Nama Penerima"}
-              </label>
-              {currentWalletBeneficiary && (
-                <span className="font-mono text-xs font-semibold text-emeraldTech">
-                  {currentWalletBeneficiary.id}
-                </span>
-              )}
+      <div className={styles.columns}>
+        <div className={`no-print ${styles.selection}`}>
+          <section className={styles.card} aria-labelledby="voucher-recipient-heading">
+            <div className={styles.cardHeading}>
+              <h2 id="voucher-recipient-heading"><UserRound size={17} aria-hidden="true" />{en ? "Recipient" : "Penerima"}</h2>
+              {recipient && <span className={styles.recipientId}>{recipient.id}</span>}
             </div>
-            <div className="relative">
-              <select
-                id="family-select"
-                value={walletBeneficiaryId}
-                onChange={(e) => setWalletBeneficiaryId(e.target.value)}
-                className="w-full h-12 px-3.5 pr-9 bg-surface text-ink-primary border border-line rounded-xl appearance-none text-sm font-semibold focus:outline-none focus:border-cta-bg cursor-pointer"
-              >
-                {beneficiaries.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — {b.rt_rw}
-                  </option>
-                ))}
+            {recipient && <div className={styles.profile}>
+              <span className={styles.initials} aria-hidden="true">{recipient.name.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join("").toUpperCase()}</span>
+              <div><strong>{recipient.name}</strong><p><MapPin size={13} aria-hidden="true" />{recipient.rt_rw}</p></div>
+            </div>}
+            {canSearchRecipients && <label className={styles.recipientSearch}>
+              <Search size={15} aria-hidden="true" />
+              <input type="search" aria-label={en ? "Search recipients" : "Cari penerima"} placeholder={en ? "Search name, ID, or address" : "Cari nama, ID, atau alamat"} value={recipientQuery} onChange={event => setRecipientQuery(event.target.value)} />
+            </label>}
+            {canSearchRecipients && query && !matchingRecipients.length && <p className={styles.searchMessage} role="status">{en ? "No matching recipients." : "Penerima tidak ditemukan."}</p>}
+            <label className={styles.selectLabel} htmlFor="family-select">{en ? "Beneficiary name" : "Nama penerima"}</label>
+            <div className={styles.selectWrap}>
+              <select id="family-select" value={walletBeneficiaryId} onChange={event => { setWalletBeneficiaryId(event.target.value); setRecipientQuery(""); }} disabled={!beneficiaries.length || currentUser.role === "BENEFICIARY"}>
+                {!beneficiaries.length && <option value="">{en ? "No linked recipient" : "Penerima belum terhubung"}</option>}
+                {recipientOptions.map(beneficiary => <option key={beneficiary.id} value={beneficiary.id}>{beneficiary.name} — {beneficiary.rt_rw}</option>)}
               </select>
-              <ChevronDown className="w-4 h-4 text-ink-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown size={15} aria-hidden="true" />
             </div>
-
-            {currentWalletBeneficiary && (
-              <div className="mt-4 pt-4 border-t border-line/45 grid grid-cols-3 gap-3 text-xs">
-                <div>
-                  <div className="text-ink-muted">
-                    {en ? "Category" : "Kategori"}
-                  </div>
-                  <div className="text-ink-primary font-semibold mt-0.5 leading-snug">
-                    {currentWalletBeneficiary.category}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-ink-muted">
-                    {en ? "Household" : "Keluarga"}
-                  </div>
-                  <div className="text-ink-primary font-mono font-bold mt-0.5">
-                    {currentWalletBeneficiary.household_size}{" "}
-                    {en ? "Ppl" : "Orang"}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-ink-muted">
-                    {en ? "Active" : "Siap Pakai"}
-                  </div>
-                  <div className="text-emeraldTech font-mono font-bold mt-0.5">
-                    {currentWalletActiveCount} {en ? "Vouchers" : "Kupon"}
-                  </div>
-                </div>
-              </div>
-            )}
+            {recipient && <dl className={styles.recipientInfo}>
+              <div><dt>{en ? "Category" : "Kategori"}</dt><dd>{recipient.category}</dd></div>
+              <div><dt>{en ? "Household" : "Keluarga"}</dt><dd>{recipient.household_size} {en ? "people" : "orang"}</dd></div>
+              <div><dt>{en ? "Available" : "Siap pakai"}</dt><dd>{currentWalletActiveCount} {en ? "vouchers" : "kupon"}</dd></div>
+            </dl>}
           </section>
 
-          <section className="bg-card border border-line/75 rounded-2xl shadow-sm p-5 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-ink-primary">
-                {en ? "Resident Vouchers" : "Kupon Milik Warga"}
-              </span>
-              <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-nested text-ink-primary font-semibold">
-                {currentWalletVouchers.length} {en ? "Vouchers" : "Kupon"}
-              </span>
+          <section className={styles.card} aria-labelledby="resident-vouchers-heading">
+            <div className={styles.cardHeading}>
+              <h2 id="resident-vouchers-heading"><Ticket size={17} aria-hidden="true" />{en ? "Voucher list" : "Daftar kupon"}</h2>
+              <span className={styles.count}>{currentWalletVouchers.length}</span>
             </div>
-
-            {currentWalletVouchers.length === 0 ? (
-              <p className="py-6 text-center text-sm text-ink-muted">
-                {en
-                  ? "No vouchers issued for this resident yet."
-                  : "Belum ada kupon untuk warga ini."}
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {currentWalletVouchers.map((v) => {
-                  const isSelected = selectedVoucherForQR?.id === v.id;
-                  return (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setSelectedVoucherForQR(v)}
-                      className={`relative w-full text-left p-4 rounded-xl transition-all ${
-                        isSelected
-                          ? "bg-emeraldTech/8 border-2 border-cta-bg shadow-sm"
-                          : "bg-surface border border-line/60 hover:border-line"
-                      }`}
-                    >
-                      {isSelected && (
-                        <span className="absolute -top-2.5 right-3 px-2.5 py-0.5 rounded-full bg-cta-bg text-cta-ink font-mono text-[10px] uppercase font-bold tracking-wider">
-                          {en ? "Selected" : "Dipilih"}
-                        </span>
-                      )}
-
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-base font-bold tracking-wider text-ink-primary">
-                          {v.short_code}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                            v.status === "ACTIVE"
-                              ? "bg-emeraldTech/12 text-emeraldTech"
-                              : "bg-nested text-ink-muted"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              v.status === "ACTIVE"
-                                ? "bg-emeraldTech"
-                                : "bg-ink-muted"
-                            }`}
-                          />
-                          {formatStatusLabel(v.status, lang)}
-                        </span>
-                      </div>
-
-                      <p className="text-sm font-bold text-ink-primary mt-2">
-                        {v.commodity_name}
-                      </p>
-                      <p className="text-xs text-ink-secondary mt-0.5">
-                        {v.commodity_items}
-                      </p>
-
-                      <div className="mt-3 pt-2.5 border-t border-line/40 flex items-center justify-between gap-2">
-                        <span className="font-mono text-base font-bold text-emeraldTech tabular-nums">
-                          {formatRupiah(v.nominal_idr)}
-                        </span>
-                        <span className="text-xs text-ink-muted tabular-nums">
-                          {en ? "Exp" : "s/d"} {formatDateTime(v.expires_at)}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="flex items-start gap-2 pt-1 text-xs text-ink-secondary leading-relaxed">
-              <Info className="w-4 h-4 text-emeraldTech shrink-0 mt-0.5" />
-              <span>
-                {en
-                  ? "Vouchers are commodity-locked for essential goods at partner stalls and cannot be cashed out."
-                  : "Kupon khusus ditukar sembako di kedai mitra dan tidak dapat diuangkan."}
-              </span>
-            </div>
+            {currentWalletVouchers.length ? (
+              <ul className={styles.list}>
+                {currentWalletVouchers.map(item => <li key={item.id}>
+                  <button type="button" aria-pressed={voucher?.id === item.id} className={styles.choice} onClick={() => setSelectedVoucherForQR(item)}>
+                    <span className={styles.choiceRow}><span className={styles.choiceCode}><code>{item.short_code}</code>{voucher?.id === item.id && <Check size={15} aria-hidden="true" />}</span><VoucherStatus status={item.status} lang={lang} /></span>
+                    <strong>{item.commodity_name}</strong>
+                    <span className={styles.muted}>{item.commodity_items}</span>
+                    <span className={styles.choiceRow}><b>{formatRupiah(item.nominal_idr)}</b><span className={styles.muted}>{en ? "Expires" : "Berlaku s/d"} {formatDateTime(item.expires_at)}</span></span>
+                  </button>
+                </li>)}
+              </ul>
+            ) : <p className={styles.empty}>{en ? "This resident has no vouchers yet." : "Belum ada kupon untuk warga ini."}</p>}
           </section>
+
+          <p className={styles.guidance}><Info size={17} aria-hidden="true" /><span>{en ? "Redeem vouchers for essential goods at partner stores. Vouchers cannot be exchanged for cash." : "Kupon hanya dapat ditukar dengan sembako di kedai mitra dan tidak dapat diuangkan."}</span></p>
         </div>
 
-        {/* Ticket Pass */}
-        <div className="lg:col-span-7 flex flex-col items-center justify-center">
-          {selectedVoucherForQR ? (
-            <div className="w-full max-w-md bg-card border-2 border-line/80 rounded-2xl p-6 flex flex-col relative shadow-md">
-              <div className="hidden sm:block absolute -left-3 top-28 w-6 h-6 rounded-full bg-canvas border-r-2 border-line/80" />
-              <div className="hidden sm:block absolute -right-3 top-28 w-6 h-6 rounded-full bg-canvas border-l-2 border-line/80" />
+        {voucher ? (
+          <article id="voucher-workspace-preview" className={styles.voucher} aria-label={en ? "Selected voucher" : "Kupon terpilih"}>
+            <div className={styles.feature} onPointerMove={tiltVoucher} onPointerLeave={event => {
+              event.currentTarget.style.removeProperty("--tilt-x");
+              event.currentTarget.style.removeProperty("--tilt-y");
+            }}>
+              <div className={styles.featureTop}><span><Ticket size={17} aria-hidden="true" />CivicLedger</span><VoucherStatus status={voucher.status} lang={lang} /></div>
+              <div className={styles.amount}><span>{en ? "Food aid voucher" : "Kupon Bantuan Sembako"}</span><VoucherAmount amount={voucher.nominal_idr} /></div>
+              <div className={styles.featureMeta} key={voucher.id}>
+                <div><h2>{voucher.beneficiary_name}</h2><p><MapPin size={14} aria-hidden="true" />{voucher.rt_rw}</p></div>
+                <div><strong>{voucher.commodity_name}</strong><p>{voucher.commodity_items}</p><p>{en ? "Valid until" : "Berlaku hingga"} <time dateTime={voucher.expires_at}>{formatDateTime(voucher.expires_at)}</time></p></div>
+              </div>
+            </div>
 
-              <div className="flex items-center justify-between pb-4 border-b border-dashed border-line">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emeraldTech">
-                  <BrandLogo size={20} className="shrink-0" />
-                  <span>
-                    {en ? "Community Food Voucher" : "Kupon Sembako Warga"}
-                  </span>
+            <div className={styles.voucherBody}>
+              <div className={styles.redemption}>
+                <div className={styles.qrFrame}>
+                  {qrDataUrl ? <img src={qrDataUrl} alt={en ? "Voucher QR code" : "QR kupon"} width={480} height={480} />
+                    : <span role="status">{en ? "Generating QR…" : "Membuat QR…"}</span>}
                 </div>
-                <div
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                    selectedVoucherForQR.status === "ACTIVE"
-                      ? "bg-emeraldTech/15 text-emeraldTech"
-                      : "bg-nested text-ink-muted"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      selectedVoucherForQR.status === "ACTIVE"
-                        ? "bg-emeraldTech"
-                        : "bg-ink-muted"
-                    }`}
-                  />
-                  {formatStatusLabel(selectedVoucherForQR.status, lang)}
+                <div className={styles.instructions}>
+                  <h3>{en ? "Show at a partner store" : "Tunjukkan di Kedai Mitra"}</h3>
+                  <p>{en ? "Show this QR to the store owner or read out the voucher code." : "Tunjukkan QR ini ke pemilik kedai atau sebutkan kode kupon."}</p>
+                  <div className={styles.shortCode}>
+                    <div><span>{en ? "Voucher code" : "Kode kupon"}</span><code>{voucher.short_code}</code></div>
+                    <button type="button" className={"no-print " + styles.copyCode} onClick={copyVoucherCode} disabled={copying} aria-busy={copying} aria-label={en ? "Copy voucher code" : "Salin kode kupon"}>
+                      {copied?.ok ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+                    </button>
+                  </div>
+                  {copied && <p className="no-print" role="status">{copied.ok ? (en ? "Code copied." : "Kode disalin.") : (en ? "Could not copy. Select the code to copy it manually." : "Gagal menyalin. Pilih kode untuk menyalin manual.")}</p>}
                 </div>
               </div>
 
-              <div className="pt-4 pb-2">
-                <h2 className="text-xl font-bold text-ink-primary">
-                  {selectedVoucherForQR.beneficiary_name}
-                </h2>
-                <p className="text-sm text-ink-secondary flex items-center gap-1.5 mt-1">
-                  <MapPin className="w-4 h-4 text-emeraldTech shrink-0" />
-                  <span>{selectedVoucherForQR.rt_rw}</span>
-                </p>
-              </div>
-
-              <div className="mt-3 p-4 bg-nested/65 border border-line/60 rounded-xl flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-ink-primary">
-                    {selectedVoucherForQR.commodity_name}
-                  </p>
-                  <p className="text-xs text-ink-secondary mt-0.5">
-                    {selectedVoucherForQR.commodity_items}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[11px] font-semibold text-ink-muted">
-                    {en ? "Value" : "Nilai"}
-                  </p>
-                  <p className="font-mono text-lg font-bold text-emeraldTech tabular-nums">
-                    {formatRupiah(selectedVoucherForQR.nominal_idr)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-col items-center">
-                <div className="bg-white p-4 rounded-2xl border-2 border-line/60 flex items-center justify-center w-56 h-56 shadow-sm">
-                  {qrDataUrl ? (
-                    <img
-                      src={qrDataUrl}
-                      alt="Voucher QR Code"
-                      className="w-full h-full block"
-                    />
-                  ) : (
-                    <span className="text-xs text-zinc-500">
-                      {en ? "Generating QR..." : "Membuat QR..."}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-ink-secondary mt-3 text-center">
-                  {en
-                    ? "Show this QR at a partner stall or read out the short code:"
-                    : "Tunjukkan QR ini ke pemilik kedai atau sebutkan kodenya:"}
-                </p>
-
-                <div className="w-full mt-3 px-4 py-3.5 bg-surface border-2 border-line rounded-xl flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-ink-secondary">
-                    {en ? "Voucher Code" : "Kode Kupon"}
-                  </span>
-                  <span className="font-mono text-2xl font-bold tracking-[0.14em] text-ink-primary select-all">
-                    {selectedVoucherForQR.short_code}
-                  </span>
-                </div>
-              </div>
-
-              <div className="no-print mt-4 border border-line/60 rounded-xl bg-surface overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowVoucherTechDetails(!showVoucherTechDetails)
-                  }
-                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-medium text-ink-secondary hover:text-ink-primary transition"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-emeraldTech" />
-                    <span>
-                      {en
-                        ? "Cryptographic Details (HMAC & Nonce)"
-                        : "Detail Teknis (HMAC & Nonce)"}
-                    </span>
-                  </span>
-                  {showVoucherTechDetails ? (
-                    <ChevronUp className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 shrink-0" />
-                  )}
+              <div className={`no-print ${styles.technical}`}>
+                <button type="button" aria-expanded={showVoucherTechDetails} aria-controls={technicalId} onClick={() => setShowVoucherTechDetails(!showVoucherTechDetails)}>
+                  <span><Lock size={15} aria-hidden="true" />{en ? "Technical details (HMAC & Nonce)" : "Detail Teknis (HMAC & Nonce)"}</span><ChevronDown size={17} aria-hidden="true" />
                 </button>
-                {showVoucherTechDetails && (
-                  <div className="px-3.5 pb-3 pt-1.5 border-t border-line/45 font-mono text-[11px] space-y-1.5">
-                    <div className="flex justify-between gap-3">
-                      <span className="text-ink-muted">ID</span>
-                      <span className="text-ink-primary">
-                        {selectedVoucherForQR.id}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-ink-muted">NONCE</span>
-                      <span className="text-ink-primary">
-                        {selectedVoucherForQR.nonce}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-ink-muted shrink-0">
-                        HMAC-SHA256
-                      </span>
-                      <span
-                        className="text-ink-secondary truncate"
-                        title={selectedVoucherForQR.hmac_signature}
-                      >
-                        {selectedVoucherForQR.hmac_signature}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="no-print space-y-2.5 mt-5">
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => onCopySmsSlip(selectedVoucherForQR)}
-                    className="h-11 px-3 rounded-xl bg-nested hover:bg-elevated border border-line/60 text-ink-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                  >
-                    {copiedSms ? (
-                      <>
-                        <Check className="w-4 h-4 text-emeraldTech" />
-                        <span className="text-emeraldTech">
-                          {en ? "Copied" : "Tersalin"}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 text-ink-muted" />
-                        <span>{en ? "Copy SMS / WA" : "Salin SMS / WA"}</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="h-11 px-3 rounded-xl bg-nested hover:bg-elevated border border-line/60 text-ink-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                  >
-                    <Printer className="w-4 h-4 text-ink-muted" />
-                    <span>{en ? "Print Paper Slip" : "Cetak Kertas"}</span>
-                  </button>
+                <div id={technicalId} className={styles.techBody} data-open={showVoucherTechDetails} aria-hidden={!showVoucherTechDetails}>
+                  <dl>
+                    <div><dt>ID</dt><dd><code>{voucher.id}</code></dd></div>
+                    <div><dt>Nonce</dt><dd><code>{voucher.nonce}</code></dd></div>
+                    <div><dt>HMAC-SHA256</dt><dd><code>{voucher.hmac_signature}</code></dd></div>
+                  </dl>
                 </div>
-
-                {selectedVoucherForQR.status === "ACTIVE" ? (
-                  canOpenMerchantPos ? (
-                    <button
-                      type="button"
-                      onClick={() => onSendToMerchantPos(selectedVoucherForQR)}
-                      className="w-full h-12 px-4 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink text-sm font-semibold flex items-center justify-center gap-2 transition shadow-sm"
-                    >
-                      <span>
-                        {en ? "Redeem at Merchant POS" : "Tukar di Kasir Kedai"}
-                      </span>
-                      <ArrowUpRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <div className="p-3.5 rounded-xl bg-emeraldTech/10 border border-emeraldTech/30 text-center text-xs text-emeraldTech font-semibold">
-                      {en
-                        ? "Active voucher. Present this screen or printed slip at any participating stall."
-                        : "Kupon aktif. Bawa HP atau hasil cetak ini ke kedai mitra terdekat."}
-                    </div>
-                  )
-                ) : (
-                  <div className="p-3.5 rounded-xl bg-nested border border-line/60 text-center text-xs text-ink-secondary">
-                    {en ? "Redeemed at " : "Sudah ditukar di "}
-                    <strong className="text-ink-primary">
-                      {selectedVoucherForQR.redeemed_by_merchant_name}
-                    </strong>
-                  </div>
-                )}
               </div>
+
+              <div className={`no-print ${styles.actions}`}>
+                {voucher.status === "ACTIVE" && canOpenMerchantPos && (
+                  <button type="button" className={styles.primary} onClick={() => onSendToMerchantPos(voucher)}>
+                    {en ? "Redeem at Merchant POS" : "Tukar di Kasir Kedai"}<ArrowUpRight size={17} aria-hidden="true" />
+                  </button>
+                )}
+                <button type="button" className={styles.button} onClick={() => onCopySmsSlip(voucher)}>
+                  {copiedSms ? <><Check size={16} aria-hidden="true" />{en ? "Copied" : "Tersalin"}</> : <><Copy size={16} aria-hidden="true" />{en ? "Copy SMS / WA" : "Salin SMS / WA"}</>}
+                </button>
+                <button type="button" className={styles.button} onClick={() => window.print()}><Printer size={16} aria-hidden="true" />{en ? "Print Paper Slip" : "Cetak Kertas"}</button>
+              </div>
+              {voucher.redeemed_by_merchant_name && <p className={styles.redeemed}>{en ? "Redeemed at" : "Ditukar di"} <strong>{voucher.redeemed_by_merchant_name}</strong></p>}
             </div>
-          ) : (
-            <div className="w-full max-w-md bg-card rounded-2xl border border-line/70 p-12 text-center text-ink-muted text-sm">
-              {en
-                ? "This resident does not have any vouchers yet."
-                : "Warga ini belum memiliki kupon sembako."}
-            </div>
-          )}
-        </div>
+          </article>
+        ) : <section className={`${styles.card} ${styles.empty}`}><Ticket size={21} aria-hidden="true" /><h2>{en ? "No voucher selected" : "Belum ada kupon dipilih"}</h2><p>{en ? "Vouchers issued for this resident will appear here." : "Kupon yang diterbitkan untuk warga ini akan muncul di sini."}</p></section>}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import QRCode from "qrcode";
+import { Sora } from "next/font/google";
 import jsQR from "jsqr";
 import {
   LayoutGrid,
@@ -67,8 +68,9 @@ import {
 import AuthGate from "@/components/AuthGate";
 import BrandLogo from "@/components/BrandLogo";
 import CoordinatorTab from "@/components/CoordinatorTab";
+import type { CalendarAvailability } from "@/components/OperationalCalendar";
 import { getOperationalReminders } from "@/components/CoordinatorOverview";
-import { Bell, Store as PartnerStore, Users } from "lucide-react";
+import { Bell } from "lucide-react";
 import type { ResourceView } from "@/components/CoordinatorResources";
 import CoordinatorSearch from "@/components/CoordinatorSearch";
 import workspace from "@/components/CoordinatorWorkspace.module.css";
@@ -79,6 +81,18 @@ import ClearinghouseTab from "@/components/ClearinghouseTab";
 import PasswordModal from "@/components/PasswordModal";
 import ReportsComplianceTab from "@/components/ReportsComplianceTab";
 import UserGuideTab from "@/components/UserGuideTab";
+
+const calendarCacheMarker = "civicledger_calendar_cache_source";
+
+function recordCalendarCacheSource(source: "server" | "fallback") {
+  try { localStorage.setItem(calendarCacheMarker, source); } catch { /* Storage may be disabled. */ }
+}
+
+function hasRecordedCalendarCache() {
+  try { return localStorage.getItem(calendarCacheMarker) === "server"; } catch { return false; }
+}
+
+const coordinatorSora = Sora({ subsets: ["latin"], variable: "--font-coordinator-sora", display: "swap" });
 
 type ActiveTab =
   | "COORDINATOR"
@@ -160,6 +174,7 @@ export default function CivicLedgerApp() {
   const [fraudBlockedCount, setFraudBlockedCount] = useState<number>(0);
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [calendarAvailability, setCalendarAvailability] = useState<CalendarAvailability>("loading");
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [settlementBatches, setSettlementBatches] = useState<SettlementBatch[]>(
@@ -235,7 +250,7 @@ export default function CivicLedgerApp() {
     : selectedWalletBeneficiaryId;
   const [selectedVoucherForQR, setSelectedVoucherForQR] =
     useState<Voucher | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [voucherQr, setVoucherQr] = useState<{ voucherId: string; url: string } | null>(null);
   const [copiedSms, setCopiedSms] = useState<boolean>(false);
 
   // State Kasir Kedai
@@ -516,6 +531,8 @@ export default function CivicLedgerApp() {
       }
 
       await applyServerState(data, true);
+      recordCalendarCacheSource("server");
+      setCalendarAvailability("live");
       const q = await getOfflineRedemptionQueue();
       setOfflineQueue(q);
     } catch {
@@ -528,8 +545,11 @@ export default function CivicLedgerApp() {
         cachedFull.merchants.length > 0
       ) {
         await applyServerState(cachedFull, false);
+        setCalendarAvailability(previous => previous === "live" ? "cached" : hasRecordedCalendarCache() ? "cached" : "unavailable");
       } else {
+        setCalendarAvailability("unavailable");
         const fallback = await buildClientFallbackState();
+        recordCalendarCacheSource("fallback");
         await applyServerState(fallback, true);
       }
       const q = await getOfflineRedemptionQueue();
@@ -562,6 +582,8 @@ export default function CivicLedgerApp() {
         };
         if (payload?.state) {
           void applyServerState(payload.state, true);
+          recordCalendarCacheSource("server");
+          setCalendarAvailability("live");
           setLoading(false);
         }
       } catch {
@@ -600,20 +622,20 @@ export default function CivicLedgerApp() {
 
   useEffect(() => {
     if (!selectedVoucherForQR) {
-      setQrDataUrl("");
+      setVoucherQr(null);
       return;
     }
+    const voucherId = selectedVoucherForQR.id;
     const payload = encodeVoucherToQRPayload(selectedVoucherForQR);
+    let cancelled = false;
     QRCode.toDataURL(payload, {
-      width: 240,
-      margin: 2,
-      color: {
-        dark: "#1d2622",
-        light: "#ffffff",
-      },
+      width: 480,
+      margin: 4,
+      color: { dark: "#1d2622", light: "#ffffff" },
     })
-      .then((url) => setQrDataUrl(url))
-      .catch(() => setQrDataUrl(""));
+      .then((url) => { if (!cancelled) setVoucherQr({ voucherId, url }); })
+      .catch(() => { if (!cancelled) setVoucherQr(null); });
+    return () => { cancelled = true; };
   }, [selectedVoucherForQR]);
 
   const stopCamera = useCallback(() => {
@@ -1481,9 +1503,13 @@ export default function CivicLedgerApp() {
       const data = await res.json();
       if (data.state) {
         await applyServerState(data.state, true);
+        recordCalendarCacheSource("server");
+        setCalendarAvailability("live");
       }
     } catch {
       const fallback = await buildClientFallbackState();
+      recordCalendarCacheSource("fallback");
+      setCalendarAvailability("unavailable");
       await applyServerState(fallback, true);
     }
     setOfflineQueue([]);
@@ -1697,25 +1723,26 @@ export default function CivicLedgerApp() {
             {entries.map(({ id, label, icon: Icon }) => {
               const title = id === "COORDINATOR" ? "Dashboard" : id === "CLEARINGHOUSE" ? (lang === "en" ? "Fund Settlement" : "Pencairan Dana") : label;
               return (
-                <button key={id} type="button" title={title} aria-label={title} aria-current={id === activeTab ? "page" : undefined} onClick={() => {
+                <button key={id} type="button" title={title} aria-label={title} aria-current={id === activeTab ? "page" : undefined} onClick={(event) => {
+                  const button = event.currentTarget;
+                  const previous = button.closest("nav")?.querySelector('[aria-current="page"]');
+                  const distance = previous ? previous.getBoundingClientRect().top - button.getBoundingClientRect().top : 0;
                   mobileNavigation.current?.close();
                   setActiveTab(id);
                   window.scrollTo(0, 0);
+                  if (distance && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                    requestAnimationFrame(() => button.querySelector("[data-nav-marker]")?.animate(
+                      [{ transform: "translateY(" + distance + "px)", opacity: .3 }, { transform: "translateY(0)", opacity: 1 }],
+                      { duration: 340, easing: "cubic-bezier(.22, .7, .24, 1)" },
+                    ));
+                  }
                 }}>
+                  <i className={workspace.navMarker} data-nav-marker aria-hidden="true" />
                   <Icon className="w-[18px] h-[18px]" />
                   <span>{title}</span>
                 </button>
               );
             })}
-            {name === "Workspace" && [
-              { view: "VOUCHERS", label: lang === "en" ? "Manage Vouchers" : "Kelola Kupon", icon: QrCode },
-              { view: "BENEFICIARIES", label: lang === "en" ? "Recipient Records" : "Data Warga", icon: Users },
-              { view: "MERCHANTS", label: lang === "en" ? "Partner Stores" : "Kedai Mitra", icon: PartnerStore },
-            ].map(({ view, label, icon: Icon }) => (
-              <button key={view} type="button" title={label} aria-label={label} onClick={() => { mobileNavigation.current?.close(); gotoCoordinator("coordinator-operations", view as ResourceView); }}>
-                <Icon size={18} /><span>{label}</span>
-              </button>
-            ))}
           </div>
         ))}
         <div className={workspace.navGroup}>
@@ -1740,7 +1767,7 @@ export default function CivicLedgerApp() {
   return (
     <div
       suppressHydrationWarning
-      className={`min-h-screen flex bg-canvas text-ink-body ${organizer ? workspace.shell : ""}`}
+      className={`min-h-screen flex bg-canvas text-ink-body ${organizer ? workspace.shell + " " + coordinatorSora.variable : ""}`}
       data-compact={organizer && compactRail}
     >
       {/* ==================== SIDEBAR KIRI (DESKTOP) ==================== */}
@@ -2326,6 +2353,9 @@ export default function CivicLedgerApp() {
                 {activeTab === "COORDINATOR" && (
                   <CoordinatorTab
                     pendingSync={offlineQueue.length}
+                    calendarRecords={{ settlementBatches, reconciliationLogs, offlineQueue }}
+                    calendarAvailability={calendarAvailability}
+                    deviceOnline={deviceOnline}
                     ledger={ledger}
                     onReports={() => setActiveTab("REPORTS")}
                     lang={lang}
@@ -2394,6 +2424,7 @@ export default function CivicLedgerApp() {
                 {/* TAB 2: KUPON WARGA / SLIP CETAK */}
                 {activeTab === "BENEFICIARY" && (
                   <BeneficiaryTab
+                    className={coordinatorSora.variable}
                     lang={lang}
                     currentUser={currentUser}
                     beneficiaries={currentUser.role === "BENEFICIARY"
@@ -2406,7 +2437,7 @@ export default function CivicLedgerApp() {
                     currentWalletActiveCount={currentWalletActiveCount}
                     selectedVoucherForQR={selectedVoucherForQR?.beneficiary_id === walletBeneficiaryId ? selectedVoucherForQR : null}
                     setSelectedVoucherForQR={setSelectedVoucherForQR}
-                    qrDataUrl={qrDataUrl}
+                    qrDataUrl={voucherQr && voucherQr.voucherId === selectedVoucherForQR?.id ? voucherQr.url : ""}
                     showVoucherTechDetails={showVoucherTechDetails}
                     setShowVoucherTechDetails={setShowVoucherTechDetails}
                     copiedSms={copiedSms}
