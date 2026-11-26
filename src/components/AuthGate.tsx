@@ -1,16 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
-  ShieldCheck,
-  WifiOff,
-  QrCode,
   Eye,
   EyeOff,
   KeyRound,
   ArrowLeft,
   CheckCircle2,
-  UserCheck,
   Store,
   Users,
   Sun,
@@ -20,11 +16,12 @@ import {
   Check,
   UserPlus,
   LogIn,
+  X,
 } from "lucide-react";
 import { AuthRole, AuthUser } from "@/lib/types";
 import { AppLang, UI_COPY } from "@/lib/i18n";
-import BrandLogo from "@/components/BrandLogo";
 import styles from "./AuthHeading.module.css";
+import AuthShowcase from "./AuthShowcase";
 
 type AuthScreenMode = "LOGIN" | "RESET" | "REGISTER";
 type ThemeMode = "light" | "dark";
@@ -88,6 +85,8 @@ export default function AuthGate({
 }: AuthGateProps) {
   const t = UI_COPY[lang];
   const en = lang === "en";
+  const demoDialog = useRef<HTMLDialogElement>(null);
+  const formPanel = useRef<HTMLElement>(null);
   const [mode, setMode] = useState<AuthScreenMode>("LOGIN");
   const [busy, setBusy] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{
@@ -327,680 +326,460 @@ export default function AuthGate({
     }
   };
 
+
+  function switchMode(next: AuthScreenMode) {
+    setFeedback(null);
+    setMode(next);
+    formPanel.current?.focus();
+  }
+
   return (
-    <div className="min-h-screen bg-canvas text-ink-body flex flex-col">
-      {/* Bar Atas */}
-      <header className="w-full border-b border-line/60 bg-surface/90 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <BrandLogo size={38} className="shrink-0 shadow-sm rounded-xl" />
-            <div>
-              <span className="font-bold text-base tracking-[-0.015em] text-ink-primary block leading-tight">
-                CivicLedger
-              </span>
-              <span className="text-xs text-ink-muted">
-                {t.brandSub}
-              </span>
-            </div>
+    <main className={styles.shell} data-register={mode === "REGISTER"}>
+      <AuthShowcase en={en} />
+      <section className={styles.panel} ref={formPanel} tabIndex={-1} aria-label={en ? "Authentication" : "Autentikasi"}>
+        <header className={styles.header}>
+          <div className={styles.wordmark}><span aria-hidden="true">C</span> CivicLedger</div>
+          <div className={styles.tools}>
+            <button type="button" onClick={() => onToggleLang(en ? "id" : "en")} aria-label={en ? "Switch to Indonesian" : "Ganti ke bahasa Inggris"}>{en ? "ID" : "EN"}</button>
+            <button type="button" onClick={() => onToggleLargeText(!largeText)} aria-label={en ? "Large text" : "Tulisan besar"} aria-pressed={largeText}><Type size={17} /></button>
+            <button type="button" onClick={() => onToggleTheme(theme === "dark" ? "light" : "dark")} aria-label={en ? "Dark mode" : "Mode gelap"} aria-pressed={theme === "dark"}>{theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}</button>
           </div>
+        </header>
+        <div className={styles.content}>
+          {feedback && (
+            <p className={styles.feedback} data-type={feedback.type} role={feedback.type === "error" ? "alert" : "status"}>
+              {feedback.text}
+            </p>
+          )}
+    {/* FORM MASUK */}
+    {mode === "LOGIN" && (
+      <form onSubmit={handleLoginSubmit} className={styles.form}>
+        <div className={styles.intro}>
+          <p className={styles.eyebrow}>{t.auth.loginEyebrow}</p>
+          <h2 className={styles.title}>
+            <span className={styles.reveal}>
+              {t.auth.loginHeading}{" "}
+              <span className={styles.brand}>CivicLedger.</span>
+            </span>
+          </h2>
+          <p className={styles.description}>{t.auth.loginSub}</p>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <div className="inline-flex bg-nested p-0.5 rounded-lg border border-line">
-              <button
-                type="button"
-                onClick={() => onToggleLang("id")}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition ${
-                  lang === "id"
-                    ? "bg-card text-ink-primary shadow-sm"
-                    : "text-ink-muted hover:text-ink-primary"
-                }`}
-              >
-                ID
-              </button>
-              <button
-                type="button"
-                onClick={() => onToggleLang("en")}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition ${
-                  lang === "en"
-                    ? "bg-card text-ink-primary shadow-sm"
-                    : "text-ink-muted hover:text-ink-primary"
-                }`}
-              >
-                EN
-              </button>
-            </div>
+        <div className="space-y-1.5">
+          <label htmlFor="auth-identifier" className="block text-xs font-semibold">
+            {t.auth.emailPhoneLabel}
+          </label>
+          <input id="auth-identifier"
+            type="text"
+            required
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            autoComplete="username"
+            className="w-full h-12 px-3.5 rounded-xl border text-sm outline-none transition"
+          />
+        </div>
 
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="auth-password" className="block text-xs font-semibold">
+              {t.auth.passLabel}
+            </label>
             <button
               type="button"
-              onClick={() => onToggleLargeText(!largeText)}
-              title={en ? "Toggle text size" : "Ubah ukuran tulisan"}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition ${
-                largeText
-                  ? "bg-cta-bg text-cta-ink border-cta-bg"
-                  : "bg-card hover:bg-nested text-ink-primary border-line"
-              }`}
+              onClick={() => {
+                setMode("RESET");
+                setResetIdentifier(identifier);
+                setResetStep(1);
+                setFeedback(null);
+              }}
+              className="text-xs font-semibold hover:underline"
             >
-              <Type className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {largeText ? t.largeTextOn : t.largeTextOff}
-              </span>
+              {t.auth.forgotLink}
             </button>
-
+          </div>
+          <div className="relative">
+            <input id="auth-password"
+              type={showPassword ? "text" : "password"}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              className="w-full h-12 pl-3.5 pr-12 rounded-xl border text-sm outline-none transition"
+            />
             <button
               type="button"
-              onClick={() => onToggleTheme(theme === "dark" ? "light" : "dark")}
-              title={en ? "Switch theme" : "Ganti tema layar"}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-card hover:bg-nested border border-line text-xs font-semibold text-ink-primary transition"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5"
+              aria-label={
+                showPassword
+                  ? (en ? "Hide password" : "Sembunyikan kata sandi")
+                  : (en ? "Show password" : "Lihat kata sandi")
+              }
             >
-              {theme === "dark" ? (
-                <>
-                  <Sun className="w-3.5 h-3.5 text-amberTech" />
-                  <span className="hidden sm:inline">{t.dayMode}</span>
-                </>
+              {showPassword ? (
+                <EyeOff className="w-4 h-4" />
               ) : (
-                <>
-                  <Moon className="w-3.5 h-3.5 text-ink-muted" />
-                  <span className="hidden sm:inline">{t.nightMode}</span>
-                </>
+                <Eye className="w-4 h-4" />
               )}
             </button>
           </div>
         </div>
-      </header>
 
-      {/* Konten 2 Kolom */}
-      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
-        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
-          {/* KOLOM KIRI */}
-          <div className="lg:col-span-6 space-y-6 lg:pt-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emeraldTech/12 border border-emeraldTech/30 text-emeraldTech text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emeraldTech" />
-              <span>{t.auth.badge}</span>
-            </div>
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full h-12 rounded-xl hover:opacity-90 active:scale-[0.99] font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
+        >
+          <LogIn className="w-4 h-4" />
+          <span>{busy ? t.auth.loginBusy : t.auth.loginBtn}</span>
+        </button>
+        <div className={styles.google}>
+          <button type="button" disabled aria-describedby="google-status">
+            <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
+              <path fill="#4285F4" d="M43.6 20H42V20H24v8h11.3A12 12 0 1 1 32 15l5.7-5.7A20 20 0 1 0 44 24c0-1.4-.1-2.7-.4-4Z" />
+              <path fill="#34A853" d="M24 44c5.2 0 9.8-1.9 13.3-5l-6.2-5.1A12 12 0 0 1 12.7 28l-6.5 5A20 20 0 0 0 24 44Z" />
+              <path fill="#FBBC05" d="m6.2 33 6.5-5a12 12 0 0 1 0-8l-6.5-5a20 20 0 0 0 0 18Z" />
+              <path fill="#EA4335" d="M24 12c3 0 5.8 1.1 8 3l5.7-5.7A20 20 0 0 0 6.2 15l6.5 5A12 12 0 0 1 24 12Z" />
+            </svg>
+            {en ? "Sign in with Google" : "Masuk dengan Google"}
+          </button>
+          <p id="google-status">{en ? "Unavailable until Google Sign-In is configured." : "Belum tersedia. Google Sign-In perlu dikonfigurasi."}</p>
+        </div>
+      </form>
+    )}
 
-            <div className="space-y-3">
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-[-0.025em] text-ink-primary leading-tight">
-                {t.auth.heroLine1}{" "}
-                <span className="text-emeraldTech">{t.auth.heroAccent}</span>
-              </h1>
-              <p className="text-[15px] text-ink-secondary leading-relaxed max-w-xl">
-                {t.auth.heroDesc}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3.5">
-              <div className="p-4 rounded-xl bg-card border border-line/70 shadow-sm flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-emeraldTech/12 text-emeraldTech flex items-center justify-center shrink-0">
-                  <QrCode className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-ink-primary">
-                    {t.auth.feat1Title}
-                  </h2>
-                  <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
-                    {t.auth.feat1Desc}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-card border border-line/70 shadow-sm flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-amberTech/12 text-amberTech flex items-center justify-center shrink-0">
-                  <WifiOff className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-ink-primary">
-                    {t.auth.feat2Title}
-                  </h2>
-                  <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
-                    {t.auth.feat2Desc}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-card border border-line/70 shadow-sm flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-emeraldTech/12 text-emeraldTech flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-ink-primary">
-                    {t.auth.feat3Title}
-                  </h2>
-                  <p className="text-xs text-ink-secondary mt-0.5 leading-relaxed">
-                    {t.auth.feat3Desc}
-                  </p>
-                </div>
-              </div>
-            </div>
+    {/* FORM RESET PASSWORD */}
+    {mode === "RESET" && (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <KeyRound className="w-5 h-5" />
+              Reset Kata Sandi
+            </h2>
+            <p className="text-xs mt-0.5">
+              Minta kode 6 angka lalu buat kata sandi baru.
+            </p>
           </div>
+          <span className="font-mono text-xs px-2.5 py-1 rounded-full font-semibold shrink-0">
+            Tahap {resetStep}/2
+          </span>
+        </div>
 
-          {/* KOLOM KANAN */}
-          <div className="lg:col-span-6 space-y-5">
-            <div className="bg-card border border-line/80 rounded-2xl p-6 sm:p-7 shadow-sm space-y-5">
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-nested border border-line/50">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("LOGIN");
-                    setFeedback(null);
-                  }}
-                  className={`py-2 px-2 rounded-lg text-xs font-semibold transition ${
-                    mode === "LOGIN"
-                      ? "bg-card text-ink-primary shadow-sm"
-                      : "text-ink-muted hover:text-ink-primary"
-                  }`}
-                >
-                  Masuk
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("RESET");
-                    setResetStep(1);
-                    setFeedback(null);
-                  }}
-                  className={`py-2 px-2 rounded-lg text-xs font-semibold transition ${
-                    mode === "RESET"
-                      ? "bg-card text-ink-primary shadow-sm"
-                      : "text-ink-muted hover:text-ink-primary"
-                  }`}
-                >
-                  Lupa Sandi
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("REGISTER");
-                    setFeedback(null);
-                  }}
-                  className={`py-2 px-2 rounded-lg text-xs font-semibold transition ${
-                    mode === "REGISTER"
-                      ? "bg-card text-ink-primary shadow-sm"
-                      : "text-ink-muted hover:text-ink-primary"
-                  }`}
-                >
-                  Daftar
-                </button>
-              </div>
+        {resetStep === 1 ? (
+          <form
+            onSubmit={handleRequestResetOtp}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <label htmlFor="auth-resetIdentifier" className="block text-xs font-semibold">
+                Email atau Nomor HP Akun
+              </label>
+              <input id="auth-resetIdentifier"
+                type="text"
+                required
+                value={resetIdentifier}
+                onChange={(e) => setResetIdentifier(e.target.value)}
+                placeholder="Contoh: warga@civicledger.id atau 0812-6311-4401"
+                className="w-full h-12 px-3.5 rounded-xl border text-sm outline-none transition"
+              />
+            </div>
 
-              {feedback && (
-                <div
-                  className={`p-3.5 rounded-xl border text-[13px] flex items-start gap-2.5 leading-relaxed ${
-                    feedback.type === "success"
-                      ? "bg-emeraldTech/10 border-emeraldTech/35 text-emeraldTech"
-                      : feedback.type === "error"
-                        ? "bg-roseTech/10 border-roseTech/35 text-roseTech"
-                        : "bg-amberTech/10 border-amberTech/35 text-amberTech"
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span className="font-medium">{feedback.text}</span>
-                </div>
-              )}
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full h-12 rounded-xl hover:opacity-90 font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>
+                {busy ? "Mengirim kode..." : "Kirim Kode 6 Angka"}
+              </span>
+            </button>
 
-              {/* FORM MASUK */}
-              {mode === "LOGIN" && (
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div className={styles.intro}>
-                    <p className={styles.eyebrow}>{t.auth.loginEyebrow}</p>
-                    <h2 className={styles.title}>
-                      <span className={styles.reveal}>
-                        {t.auth.loginHeading}{" "}
-                        <span className={styles.brand}>CivicLedger.</span>
-                      </span>
-                    </h2>
-                    <p className={styles.description}>{t.auth.loginSub}</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-ink-primary">
-                      Email atau Nomor HP
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Contoh: pengurus@civicledger.id atau 0811-6200-0101"
-                      className="w-full h-12 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none transition"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-semibold text-ink-primary">
-                        Kata Sandi
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMode("RESET");
-                          setResetIdentifier(identifier);
-                          setResetStep(1);
-                          setFeedback(null);
-                        }}
-                        className="text-xs font-semibold text-emeraldTech hover:underline"
-                      >
-                        Lupa kata sandi?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Masukkan kata sandi"
-                        className="w-full h-12 pl-3.5 pr-12 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none transition"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-ink-muted hover:text-ink-primary"
-                        aria-label={
-                          showPassword
-                            ? "Sembunyikan kata sandi"
-                            : "Lihat kata sandi"
-                        }
-                      >
-                        {showPassword ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
+            <button
+              type="button"
+              onClick={() => {
+                setMode("LOGIN");
+                setFeedback(null);
+              }}
+              className="w-full py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Kembali ke halaman Masuk
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleConfirmReset} className="space-y-4">
+            {demoOtpBanner && (
+              <div className="p-4 rounded-xl bg-amberTech/10 border border-amberTech/35 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amberTech">
+                    Kode OTP Simulasi (Demo Lokal)
+                  </span>
                   <button
-                    type="submit"
-                    disabled={busy}
-                    className="w-full h-12 rounded-xl bg-cta-bg hover:opacity-90 active:scale-[0.99] text-cta-ink font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
+                    type="button"
+                    onClick={() => {
+                      setOtpInput(demoOtpBanner);
+                      navigator.clipboard?.writeText(demoOtpBanner);
+                      setCopiedOtp(true);
+                      setTimeout(() => setCopiedOtp(false), 1800);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-card border text-[11px] font-semibold hover:"
                   >
-                    <LogIn className="w-4 h-4" />
-                    <span>{busy ? "Memeriksa..." : "Masuk"}</span>
+                    {copiedOtp ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        Terisi
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        Isi Kode
+                      </>
+                    )}
                   </button>
-                </form>
-              )}
+                </div>
+                <p className="text-xs">
+                  Kode verifikasi untuk{" "}
+                  <strong>{resetAccountName}</strong>:
+                </p>
+                <p className="font-mono text-2xl font-bold tracking-[0.22em]">
+                  {demoOtpBanner}
+                </p>
+              </div>
+            )}
 
-              {/* FORM RESET PASSWORD */}
-              {mode === "RESET" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <h2 className="text-lg font-bold text-ink-primary flex items-center gap-2">
-                        <KeyRound className="w-5 h-5 text-emeraldTech" />
-                        Reset Kata Sandi
-                      </h2>
-                      <p className="text-xs text-ink-muted mt-0.5">
-                        Minta kode 6 angka lalu buat kata sandi baru.
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-nested text-ink-primary font-semibold shrink-0">
-                      Tahap {resetStep}/2
-                    </span>
-                  </div>
+            <div className="space-y-1.5">
+              <label htmlFor="auth-otpInput" className="block text-xs font-semibold">
+                1. Kode 6 Angka
+              </label>
+              <input id="auth-otpInput"
+                type="text"
+                required
+                maxLength={6}
+                value={otpInput}
+                onChange={(e) =>
+                  setOtpInput(e.target.value.replace(/[^0-9]/g, ""))
+                }
+                placeholder="Masukkan 6 angka"
+                className="w-full h-12 px-3.5 rounded-xl border font-mono text-lg font-bold tracking-[0.2em] placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal outline-none"
+              />
+            </div>
 
-                  {resetStep === 1 ? (
-                    <form
-                      onSubmit={handleRequestResetOtp}
-                      className="space-y-4"
-                    >
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-ink-primary">
-                          Email atau Nomor HP Akun
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={resetIdentifier}
-                          onChange={(e) => setResetIdentifier(e.target.value)}
-                          placeholder="Contoh: warga@civicledger.id atau 0812-6311-4401"
-                          className="w-full h-12 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none transition"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={busy}
-                        className="w-full h-12 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
-                      >
-                        <KeyRound className="w-4 h-4" />
-                        <span>
-                          {busy ? "Mengirim kode..." : "Kirim Kode 6 Angka"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMode("LOGIN");
-                          setFeedback(null);
-                        }}
-                        className="w-full py-2 text-xs font-semibold text-ink-muted hover:text-ink-primary flex items-center justify-center gap-1.5"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        Kembali ke halaman Masuk
-                      </button>
-                    </form>
+            <div className="space-y-1.5">
+              <label htmlFor="auth-newPassword" className="block text-xs font-semibold">
+                2. Kata Sandi Baru (min. 6 karakter)
+              </label>
+              <div className="relative">
+                <input id="auth-newPassword"
+                  type={showNewPassword ? "text" : "password"}
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Contoh: balige2026"
+                  className="w-full h-12 pl-3.5 pr-12 rounded-xl border text-sm outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5"
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="w-4 h-4" />
                   ) : (
-                    <form onSubmit={handleConfirmReset} className="space-y-4">
-                      {demoOtpBanner && (
-                        <div className="p-4 rounded-xl bg-amberTech/10 border border-amberTech/35 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-bold text-amberTech">
-                              Kode OTP Simulasi (Demo Lokal)
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOtpInput(demoOtpBanner);
-                                navigator.clipboard?.writeText(demoOtpBanner);
-                                setCopiedOtp(true);
-                                setTimeout(() => setCopiedOtp(false), 1800);
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-card border border-line text-[11px] font-semibold text-ink-primary hover:bg-nested"
-                            >
-                              {copiedOtp ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emeraldTech" />
-                                  Terisi
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" />
-                                  Isi Kode
-                                </>
-                              )}
-                            </button>
-                          </div>
-                          <p className="text-xs text-ink-secondary">
-                            Kode verifikasi untuk{" "}
-                            <strong>{resetAccountName}</strong>:
-                          </p>
-                          <p className="font-mono text-2xl font-bold tracking-[0.22em] text-ink-primary">
-                            {demoOtpBanner}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-ink-primary">
-                          1. Kode 6 Angka
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={6}
-                          value={otpInput}
-                          onChange={(e) =>
-                            setOtpInput(e.target.value.replace(/[^0-9]/g, ""))
-                          }
-                          placeholder="Masukkan 6 angka"
-                          className="w-full h-12 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg font-mono text-lg font-bold tracking-[0.2em] text-ink-primary placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal outline-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-ink-primary">
-                          2. Kata Sandi Baru (min. 6 karakter)
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showNewPassword ? "text" : "password"}
-                            required
-                            minLength={6}
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="Contoh: balige2026"
-                            className="w-full h-12 pl-3.5 pr-12 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowNewPassword(!showNewPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-ink-muted hover:text-ink-primary"
-                          >
-                            {showNewPassword ? (
-                              <EyeOff className="w-4 h-4" />
-                            ) : (
-                              <Eye className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-ink-primary">
-                          3. Ketik Ulang Kata Sandi Baru
-                        </label>
-                        <input
-                          type={showNewPassword ? "text" : "password"}
-                          required
-                          minLength={6}
-                          value={confirmNewPassword}
-                          onChange={(e) =>
-                            setConfirmNewPassword(e.target.value)
-                          }
-                          placeholder="Ketik ulang kata sandi baru"
-                          className="w-full h-12 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={busy}
-                        className="w-full h-12 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>
-                          {busy ? "Menyimpan..." : "Simpan Kata Sandi Baru"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResetStep(1);
-                          setFeedback(null);
-                        }}
-                        className="w-full py-1.5 text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                      >
-                        Ganti email atau minta kode baru
-                      </button>
-                    </form>
+                    <Eye className="w-4 h-4" />
                   )}
-                </div>
-              )}
-
-              {/* FORM DAFTAR */}
-              {mode === "REGISTER" && (
-                <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-                  <div>
-                    <h2 className="text-lg font-bold text-ink-primary">
-                      Daftar Akun Baru
-                    </h2>
-                    <p className="text-xs text-ink-muted mt-0.5">
-                      Isi data di bawah untuk membuat akun baru.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-ink-primary">
-                      Nama Lengkap
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Contoh: Mangasi Simatupang"
-                      className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-xs font-semibold text-ink-primary">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="nama@civicledger.id"
-                        className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-semibold text-ink-primary">
-                        Nomor HP
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={regPhone}
-                        onChange={(e) => setRegPhone(e.target.value)}
-                        placeholder="0812-6300-1234"
-                        className="w-full h-11 px-3.5 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-emeraldTech/10 border border-emeraldTech/25 text-xs text-ink-secondary">
-                    Pendaftaran melalui portal web otomatis membuat akun{" "}
-                    <strong className="text-emeraldTech">Pengurus Bansos</strong>.
-                    Untuk Warga Penerima dan Pemilik Kedai, silakan mendaftar
-                    lewat aplikasi HP CivicLedger.
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-ink-primary">
-                      Kata Sandi (min. 6 karakter)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showRegPassword ? "text" : "password"}
-                        required
-                        minLength={6}
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        placeholder="Buat kata sandi"
-                        className="w-full h-11 pl-3.5 pr-12 rounded-xl bg-surface border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowRegPassword(!showRegPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-ink-muted hover:text-ink-primary"
-                      >
-                        {showRegPassword ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    className="w-full h-12 rounded-xl bg-cta-bg hover:opacity-90 text-cta-ink font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    <span>{busy ? "Mendaftar..." : "Daftar & Masuk"}</span>
-                  </button>
-                </form>
-              )}
-            </div>
-
-            {/* Akun Demo Pengurus */}
-            <div className="bg-card border border-line/75 rounded-2xl p-5 space-y-3 shadow-sm">
-              <div>
-                <h3 className="text-sm font-bold text-ink-primary">
-                  {t.auth.primaryWebTitle}
-                </h3>
-                <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">
-                  {t.auth.primaryWebDesc}
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                {DEMO_ACCOUNTS.map((acc) => {
-                  const Icon = acc.icon;
-                  return (
-                    <div
-                      key={acc.email}
-                      className="p-3.5 rounded-xl bg-surface border border-emeraldTech/35 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-                    >
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center shrink-0">
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[13px] font-bold text-ink-primary">
-                              {en ? acc.titleEn : acc.titleId}
-                            </span>
-                            <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-emeraldTech/12 text-emeraldTech">
-                              {en ? acc.badgeEn : acc.badgeId}
-                            </span>
-                          </div>
-                          <p className="text-xs text-ink-secondary truncate">
-                            {acc.subtitle}
-                          </p>
-                          <p className="font-mono text-[11px] text-ink-muted mt-0.5">
-                            {acc.email} · {en ? "pass:" : "sandi:"}{" "}
-                            <strong>{acc.password}</strong>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMode("LOGIN");
-                            setIdentifier(acc.email);
-                            setPassword(acc.password);
-                            setFeedback(null);
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-nested hover:bg-elevated text-xs font-semibold text-ink-primary transition"
-                        >
-                          {t.auth.fillBtn}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            handleLoginSubmit(undefined, acc.email, acc.password)
-                          }
-                          className="px-3 py-1.5 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold transition"
-                        >
-                          {t.auth.loginBtn}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="pt-2.5 border-t border-line/50 text-xs text-ink-muted leading-relaxed space-y-1">
-                <p>
-                  <strong className="text-ink-primary">
-                    {en ? "Field Users (Mobile App):" : "Pengguna Lapangan (Aplikasi HP):"}
-                  </strong>{" "}
-                  {en
-                    ? "Beneficiaries and Local Merchants use the CivicLedger Mobile App (Expo / React Native)."
-                    : "Warga penerima bansos & pemilik kedai sembako masuk melalui Aplikasi Mobile CivicLedger di HP."}
-                </p>
-                <p className="font-mono text-[11px]">
-                  {en ? "Mobile Demo:" : "Akun Mobile:"} warga@civicledger.id (warga2026) · kedai@civicledger.id (kedai2026)
-                </p>
+                </button>
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="auth-confirmNewPassword" className="block text-xs font-semibold">
+                3. Ketik Ulang Kata Sandi Baru
+              </label>
+              <input id="auth-confirmNewPassword"
+                type={showNewPassword ? "text" : "password"}
+                required
+                minLength={6}
+                value={confirmNewPassword}
+                onChange={(e) =>
+                  setConfirmNewPassword(e.target.value)
+                }
+                placeholder="Ketik ulang kata sandi baru"
+                className="w-full h-12 px-3.5 rounded-xl border text-sm outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full h-12 rounded-xl hover:opacity-90 font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>
+                {busy ? "Menyimpan..." : "Simpan Kata Sandi Baru"}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setResetStep(1);
+                setFeedback(null);
+              }}
+              className="w-full py-1.5 text-xs font-semibold"
+            >
+              Ganti email atau minta kode baru
+            </button>
+          </form>
+        )}
+      </div>
+    )}
+
+    {/* FORM DAFTAR */}
+    {mode === "REGISTER" && (
+      <form onSubmit={handleRegisterSubmit} className={styles.form}>
+        <div>
+          <h2 className="text-lg font-bold">
+            {en ? "Create your account" : "Daftar Akun Baru"}
+          </h2>
+          <p className="text-xs mt-0.5">
+            {en ? "Get started with CivicLedger." : "Isi data di bawah untuk membuat akun baru."}
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="auth-regName" className="block text-xs font-semibold">
+            Nama Lengkap
+          </label>
+          <input id="auth-regName"
+            type="text"
+            required
+            value={regName}
+            onChange={(e) => setRegName(e.target.value)}
+            placeholder="Contoh: Mangasi Simatupang"
+            className="w-full h-11 px-3.5 rounded-xl border text-sm outline-none"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label htmlFor="auth-regEmail" className="block text-xs font-semibold">
+              Email
+            </label>
+            <input id="auth-regEmail"
+              type="email"
+              required
+              value={regEmail}
+              onChange={(e) => setRegEmail(e.target.value)}
+              placeholder="nama@civicledger.id"
+              className="w-full h-11 px-3.5 rounded-xl border text-sm outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="auth-regPhone" className="block text-xs font-semibold">
+              Nomor HP
+            </label>
+            <input id="auth-regPhone"
+              type="text"
+              required
+              value={regPhone}
+              onChange={(e) => setRegPhone(e.target.value)}
+              placeholder="0812-6300-1234"
+              className="w-full h-11 px-3.5 rounded-xl border text-sm outline-none"
+            />
           </div>
         </div>
-      </main>
-    </div>
+
+        <div className="p-3 rounded-xl border text-xs">
+          Pendaftaran melalui portal web otomatis membuat akun{" "}
+          <strong className="">Pengurus Bansos</strong>.
+          Untuk Warga Penerima dan Pemilik Kedai, silakan mendaftar
+          lewat aplikasi HP CivicLedger.
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="auth-regPassword" className="block text-xs font-semibold">
+            Kata Sandi (min. 6 karakter)
+          </label>
+          <div className="relative">
+            <input id="auth-regPassword"
+              type={showRegPassword ? "text" : "password"}
+              required
+              minLength={6}
+              value={regPassword}
+              onChange={(e) => setRegPassword(e.target.value)}
+              placeholder="Buat kata sandi"
+              className="w-full h-11 pl-3.5 pr-12 rounded-xl border text-sm outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setShowRegPassword(!showRegPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5"
+            >
+              {showRegPassword ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full h-12 rounded-xl hover:opacity-90 font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>{busy ? "Mendaftar..." : "Daftar & Masuk"}</span>
+        </button>
+      </form>
+    )}
+
+          {mode !== "RESET" && (
+            <p className={styles.switch}>
+              {mode === "LOGIN" ? (en ? "New to CivicLedger?" : "Belum punya akun?") : (en ? "Already have an account?" : "Sudah punya akun?")}{" "}
+              <button type="button" onClick={() => switchMode(mode === "LOGIN" ? "REGISTER" : "LOGIN")}>
+                {mode === "LOGIN" ? t.auth.tabRegister : t.auth.tabLogin}
+              </button>
+            </p>
+          )}
+          <button className={styles.demoLink} type="button" onClick={() => demoDialog.current?.showModal()}>
+            {en ? "Try a demo account" : "Coba akun demo"}
+          </button>
+        </div>
+      </section>
+      <dialog ref={demoDialog} className={styles.dialog} aria-labelledby="demo-title">
+        <div className={styles.dialogHeader}>
+          <h2 id="demo-title">{en ? "Demo accounts" : "Akun demo"}</h2>
+          <button type="button" onClick={() => demoDialog.current?.close()} aria-label={en ? "Close" : "Tutup"}><X size={20} /></button>
+        </div>
+        {DEMO_ACCOUNTS.map((acc) => (
+          <article key={acc.email} className={styles.demoAccount}>
+            <div><strong>{en ? acc.titleEn : acc.titleId}</strong><br /><code>{acc.email}</code></div>
+            <div className={styles.demoActions}>
+              <button type="button" onClick={() => {
+                demoDialog.current?.close();
+                setIdentifier(acc.email);
+                setPassword(acc.password);
+                switchMode("LOGIN");
+              }}>{t.auth.fillBtn}</button>
+              <button type="button" disabled={busy} onClick={() => {
+                demoDialog.current?.close();
+                switchMode("LOGIN");
+                void handleLoginSubmit(undefined, acc.email, acc.password);
+              }}>{t.auth.loginBtn}</button>
+            </div>
+          </article>
+        ))}
+        <p className={styles.mobileDemo}>
+          {en ? "Mobile app demo accounts" : "Akun demo aplikasi HP"}<br />
+          <code>warga@civicledger.id (warga2026)</code><br />
+          <code>kedai@civicledger.id (kedai2026)</code>
+        </p>
+      </dialog>
+    </main>
   );
 }

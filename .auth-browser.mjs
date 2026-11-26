@@ -1,0 +1,57 @@
+﻿const base = 'http://localhost:3000';
+const targets = await (await fetch('http://localhost:9227/json/list')).json();
+const ws = new WebSocket(targets.find(page => page.type === 'page').webSocketDebuggerUrl);
+await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+let id = 0;
+const pending = new Map();
+ws.onmessage = ({data}) => { const message = JSON.parse(data); if (pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); } };
+const send = (method, params = {}) => new Promise(resolve => { pending.set(++id, resolve); ws.send(JSON.stringify({id, method, params})); });
+const evaluate = async expression => {
+  const result = await send('Runtime.evaluate', {expression, returnByValue:true});
+  if (result.result?.exceptionDetails) throw Error(result.result.exceptionDetails.exception?.description);
+  return result.result?.result?.value;
+};
+const delay = ms => new Promise(resolve => setTimeout(resolve,ms));
+const assert = (condition, message) => { if (!condition) throw Error(message); };
+await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
+await send('Page.navigate',{url:base});
+const login = 'input[autocomplete="username"]';
+for (let i=0;i<90;i++) {
+  if (await evaluate('!!document.querySelector('+JSON.stringify(login)+')')) break;
+  await delay(800);
+}
+await delay(900);
+console.log(await evaluate('document.body.innerText.slice(0,1600)'));
+assert(await evaluate('!!document.querySelector('+JSON.stringify(login)+')'), 'Login form did not load');
+const shot = async name => {
+  const capture = await send('Page.captureScreenshot',{format:'png'});
+  const fs = await import('node:fs');
+  fs.writeFileSync(name,Buffer.from(capture.result.data,'base64'));
+};
+await shot('.next/auth-login-preview.png');
+const positions = 'Array.from(document.querySelectorAll("main > aside,main > section"),el=>Math.round(el.getBoundingClientRect().left))';
+const click = async (pattern, root = 'document') => evaluate('Array.from('+root+'.querySelectorAll("button")).find(el=>'+pattern+'.test(el.innerText.trim())).click()');
+assert(JSON.stringify(await evaluate(positions)) === '[0,720]', 'Login split positions');
+assert(await evaluate('Array.from(document.querySelectorAll("button")).some(el=>el.disabled && /Google/.test(el.innerText))'), 'Google unavailable status');
+await click('/^(Daftar|Register)$/');
+await delay(220);
+const moving = await evaluate(positions);
+assert(moving[0]>0 && moving[0]<720, 'Registration slide midpoint');
+await delay(580);
+assert(JSON.stringify(await evaluate(positions)) === '[720,0]', 'Register split positions');
+await shot('.next/auth-register-preview.png');
+await click('/^(Masuk|Sign In)$/i');
+await delay(800);
+await click('/Coba akun demo|Try a demo account/');
+assert(await evaluate('document.querySelector("dialog").open'), 'Demo dialog opens');
+await click('/Isi|Fill/i','document.querySelector("dialog")');
+assert(await evaluate('!document.querySelector("dialog").open && document.querySelector("#auth-identifier").value==="pengurus@civicledger.id"'), 'Demo fill retained');
+await click('/Lupa kata sandi|Forgot/i');
+assert(await evaluate('!!document.querySelector("#auth-resetIdentifier")'), 'Recovery step visible');
+await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+await send('Page.navigate',{url:base});
+await delay(2500);
+assert(await evaluate('document.documentElement.scrollWidth<=390 && document.querySelector("main > section").getBoundingClientRect().top===0'), 'Responsive layout');
+await shot('.next/auth-mobile-preview.png');
+console.log(JSON.stringify({moving,desktop:true,google:true,register:true,demo:true,recovery:true,mobile:true}));
+ws.close();
