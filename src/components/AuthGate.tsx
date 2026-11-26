@@ -53,6 +53,12 @@ const DEMO_ACCOUNTS: Array<{
     email: "kedai@civicledger.id",
     password: "kedai2026",
   },
+  {
+    titleId: "Warga Penerima",
+    titleEn: "Aid Recipient",
+    email: "warga@civicledger.id",
+    password: "warga2026",
+  },
 ];
 
 export default function AuthGate({
@@ -122,27 +128,6 @@ export default function AuthGate({
         setFeedback({
           type: "error",
           text: data.error || "Gagal masuk. Periksa lagi email dan sandi.",
-        });
-        return;
-      }
-      if (data.user?.role !== "COORDINATOR") {
-        await fetch("/api/auth", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "LOGOUT" }),
-        }).catch(() => {});
-        setFeedback({
-          type: "error",
-          text: "Website ini khusus untuk Pengurus Bansos. Warga penerima & pemilik kedai silakan masuk lewat aplikasi HP CivicLedger.",
-        });
-        return;
-      }
-      if (data.user?.role !== "COORDINATOR" && data.user?.role !== "MERCHANT") {
-        setFeedback({
-          type: "info",
-          text: en
-            ? "Beneficiary accounts use the CivicLedger Mobile App to show their QR voucher. Organizers and Store Owners can sign in here."
-            : "Akun Warga Penerima menggunakan Aplikasi Mobile CivicLedger di HP untuk menunjukkan QR kupon. Portal web ini untuk Pengurus & Pemilik Toko.",
         });
         return;
       }
@@ -763,11 +748,6 @@ export default function AuthGate({
             </div>
           </article>
         ))}
-        <p className={styles.mobileDemo}>
-          {en ? "Mobile app demo accounts" : "Akun demo aplikasi HP"}<br />
-          <code>warga@civicledger.id (warga2026)</code><br />
-          <code>kedai@civicledger.id (kedai2026)</code>
-        </p>
       </dialog>
     </main>
   );

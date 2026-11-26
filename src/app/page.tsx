@@ -213,8 +213,11 @@ export default function CivicLedgerApp() {
     useState<string>("BRI / QRIS •• 5510");
 
   // State Kupon Warga
-  const [walletBeneficiaryId, setWalletBeneficiaryId] =
+  const [selectedWalletBeneficiaryId, setWalletBeneficiaryId] =
     useState<string>("WGA-0401");
+  const walletBeneficiaryId = currentUser?.role === "BENEFICIARY"
+    ? currentUser.linked_beneficiary_id ?? ""
+    : selectedWalletBeneficiaryId;
   const [selectedVoucherForQR, setSelectedVoucherForQR] =
     useState<Voucher | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
@@ -241,7 +244,6 @@ export default function CivicLedgerApp() {
   );
 
   const applyAuthenticatedUser = useCallback((user: AuthUser) => {
-    if (user.role !== "COORDINATOR" && user.role !== "MERCHANT") return;
     setCurrentUser(user);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("civicledger_last_user", JSON.stringify(user));
@@ -251,6 +253,8 @@ export default function CivicLedgerApp() {
       if (user.linked_merchant_id) {
         setActiveMerchantId(user.linked_merchant_id);
       }
+    } else if (user.role === "BENEFICIARY") {
+      setActiveTab("BENEFICIARY");
     } else {
       setActiveTab("COORDINATOR");
     }
@@ -278,13 +282,9 @@ export default function CivicLedgerApp() {
     fetch("/api/auth", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        if (
-          data?.authenticated &&
-          (data?.user?.role === "COORDINATOR" || data?.user?.role === "MERCHANT")
-        ) {
+        if (data?.authenticated && data.user) {
           applyAuthenticatedUser(data.user);
         } else {
-          // Bersihkan cache user lama jika bukan akun pengurus/pemilik toko
           window.localStorage.removeItem("civicledger_last_user");
         }
       })
@@ -294,7 +294,7 @@ export default function CivicLedgerApp() {
           if (cached) {
             const parsed = JSON.parse(cached) as AuthUser;
             if (
-              (parsed.role === "COORDINATOR" || parsed.role === "MERCHANT") &&
+              (parsed.role === "COORDINATOR" || parsed.role === "MERCHANT" || parsed.role === "BENEFICIARY") &&
               parsed.email?.endsWith("@civicledger.id")
             ) {
               applyAuthenticatedUser(parsed);
@@ -1565,10 +1565,10 @@ export default function CivicLedgerApp() {
     },
     {
       id: "BENEFICIARY",
-      label: lang === "en" ? "Print Voucher Slip" : "Cetak Slip Kupon",
+      label: currentUser?.role === "BENEFICIARY" ? t.tabs.BENEFICIARY.label : (lang === "en" ? "Print Voucher Slip" : "Cetak Slip Kupon"),
       section: "OPERATIONS",
       icon: QrCode,
-      roles: ["COORDINATOR"],
+      roles: ["COORDINATOR", "BENEFICIARY"],
     },
     {
       id: "MERCHANT_POS",
@@ -1670,7 +1670,9 @@ export default function CivicLedgerApp() {
                   ? lang === "en"
                     ? "Store Owner Portal"
                     : "Portal Pemilik Toko"
-                  : t.portalSub}
+                  : currentUser.role === "BENEFICIARY"
+                    ? (lang === "en" ? "Aid Recipient Portal" : "Portal Warga Penerima")
+                    : t.portalSub}
               </span>
             </div>
           </div>
@@ -1998,7 +2000,7 @@ export default function CivicLedgerApp() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {offlineQueue.length > 0 && (
+            {currentUser.role !== "BENEFICIARY" && offlineQueue.length > 0 && (
               <button
                 onClick={handleSyncOfflineBatch}
                 disabled={isSyncingBatch}
@@ -2114,7 +2116,7 @@ export default function CivicLedgerApp() {
                   kupon warga. Catatan disimpan dulu di HP ini.
                 </span>
               </div>
-              {offlineQueue.length > 0 && (
+              {currentUser.role !== "BENEFICIARY" && offlineQueue.length > 0 && (
                 <button
                   onClick={handleSyncOfflineBatch}
                   className="text-xs font-bold underline underline-offset-4 self-start sm:self-auto whitespace-nowrap"
@@ -2241,13 +2243,15 @@ export default function CivicLedgerApp() {
                   <BeneficiaryTab
                     lang={lang}
                     currentUser={currentUser}
-                    beneficiaries={beneficiaries}
+                    beneficiaries={currentUser.role === "BENEFICIARY"
+                      ? beneficiaries.filter((beneficiary) => beneficiary.id === walletBeneficiaryId)
+                      : beneficiaries}
                     walletBeneficiaryId={walletBeneficiaryId}
                     setWalletBeneficiaryId={setWalletBeneficiaryId}
                     currentWalletBeneficiary={currentWalletBeneficiary || null}
                     currentWalletVouchers={currentWalletVouchers}
                     currentWalletActiveCount={currentWalletActiveCount}
-                    selectedVoucherForQR={selectedVoucherForQR}
+                    selectedVoucherForQR={selectedVoucherForQR?.beneficiary_id === walletBeneficiaryId ? selectedVoucherForQR : null}
                     setSelectedVoucherForQR={setSelectedVoucherForQR}
                     qrDataUrl={qrDataUrl}
                     showVoucherTechDetails={showVoucherTechDetails}
