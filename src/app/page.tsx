@@ -70,7 +70,7 @@ import CoordinatorTab from "@/components/CoordinatorTab";
 import type { ResourceView } from "@/components/CoordinatorResources";
 import CoordinatorSearch from "@/components/CoordinatorSearch";
 import workspace from "@/components/CoordinatorWorkspace.module.css";
-import { Menu, PanelLeftClose, PanelLeftOpen, Plus, Users, X as CloseMenu } from "lucide-react";
+import { Menu, PanelLeftClose, Plus, Settings, X as CloseMenu } from "lucide-react";
 import BeneficiaryTab from "@/components/BeneficiaryTab";
 import MerchantPosTab from "@/components/MerchantPosTab";
 import ClearinghouseTab from "@/components/ClearinghouseTab";
@@ -127,7 +127,7 @@ export default function CivicLedgerApp() {
       window.removeEventListener("offline", update);
     };
   }, []);
-  const [menuSearch, setMenuSearch] = useState("");
+  const organizerSettings = useRef<HTMLDetailsElement>(null);
   const mobileNavigation = useRef<HTMLDialogElement>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("COORDINATOR");
   const [theme, setTheme] = useState<ThemeMode>("light");
@@ -1660,10 +1660,8 @@ export default function CivicLedgerApp() {
   }
 
   const organizer = currentUser.role === "COORDINATOR";
-  const menuQuery = organizer ? menuSearch.trim().toLowerCase() : "";
-  const visibleNav = navItems.filter((item) => item.label.toLowerCase().includes(menuQuery));
-  const opsNav = visibleNav.filter((i) => i.section === "OPERATIONS");
-  const clearNav = visibleNav.filter((i) => i.section === "CLEARINGHOUSE");
+  const opsNav = navItems.filter((i) => i.section === "OPERATIONS");
+  const clearNav = navItems.filter((i) => i.section === "CLEARINGHOUSE");
   const openPassword = () => {
     setCpError("");
     setShowChangePasswordModal(true);
@@ -1677,13 +1675,52 @@ export default function CivicLedgerApp() {
       else target?.scrollIntoView({ block: "start" });
     }));
   }
-  const shortcuts = [
-    { label: lang === "en" ? "Analytics" : "Analitik", id: "coordinator-analytics", icon: BarChart3 },
-    { label: lang === "en" ? "Manage vouchers" : "Kelola Kupon", id: "coordinator-operations", view: "VOUCHERS" as const, icon: QrCode },
-    { label: lang === "en" ? "Resident records" : "Data Warga", id: "coordinator-operations", view: "BENEFICIARIES" as const, icon: Users },
-    { label: lang === "en" ? "Partner stores" : "Kedai Mitra", id: "coordinator-operations", view: "MERCHANTS" as const, icon: Landmark },
-    { label: lang === "en" ? "Food packages" : "Paket Sembako", id: "coordinator-operations", view: "PACKAGES" as const, icon: QrCode },
-  ].filter((item) => item.label.toLowerCase().includes(menuQuery));
+  function openOrganizerSettings() {
+    mobileNavigation.current?.close();
+    const settings = organizerSettings.current;
+    if (!settings) return;
+    settings.open = true;
+    settings.querySelector("summary")?.focus();
+  }
+
+  function organizerNavigation() {
+    const groups = [
+      { name: "Workspace", entries: opsNav },
+      { name: "Management", entries: clearNav },
+    ];
+    return (
+      <nav className={workspace.organizerNav} aria-label={lang === "en" ? "Organizer navigation" : "Navigasi pengurus"}>
+        {groups.map(({ name, entries }) => (
+          <div key={name} className={workspace.navGroup}>
+            <p>{name}</p>
+            {entries.map(({ id, label, icon: Icon }) => {
+              const title = id === "COORDINATOR" ? "Dashboard" : id === "CLEARINGHOUSE" ? (lang === "en" ? "Fund Settlement" : "Pencairan Dana") : label;
+              return (
+                <button key={id} type="button" title={title} aria-label={title} aria-current={id === activeTab ? "page" : undefined} onClick={() => {
+                  mobileNavigation.current?.close();
+                  setActiveTab(id);
+                  window.scrollTo(0, 0);
+                }}>
+                  <Icon className="w-[18px] h-[18px]" />
+                  <span>{title}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <div className={workspace.navGroup}>
+          <p>Account</p>
+          <button type="button" title={lang === "en" ? "Settings" : "Pengaturan"} aria-label={lang === "en" ? "Settings" : "Pengaturan"} onClick={openOrganizerSettings}>
+            <Settings size={18} /><span>{lang === "en" ? "Settings" : "Pengaturan"}</span>
+          </button>
+          <button type="button" title={lang === "en" ? "Sign out" : "Keluar"} aria-label={lang === "en" ? "Sign out" : "Keluar"} onClick={handleLogout}>
+            <LogOut size={18} /><span>{lang === "en" ? "Sign out" : "Keluar"}</span>
+          </button>
+        </div>
+      </nav>
+    );
+  }
+
   function openVoucher(voucher: Voucher) {
     setWalletBeneficiaryId(voucher.beneficiary_id);
     setSelectedVoucherForQR(voucher);
@@ -1698,6 +1735,40 @@ export default function CivicLedgerApp() {
     >
       {/* ==================== SIDEBAR KIRI (DESKTOP) ==================== */}
       <aside className="no-print hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-surface border-r border-line/70 z-30 select-none">
+        {organizer ? (
+          <div className={workspace.brandHeader}>
+            <button
+              className={workspace.brandMark}
+              type="button"
+              disabled={!compactRail}
+              aria-hidden={!compactRail}
+              aria-label={lang === "en" ? "Expand menu" : "Perluas menu"}
+              aria-expanded={!compactRail}
+              onClick={(event) => {
+                const header = event.currentTarget.parentElement;
+                setCompactRail(false);
+                requestAnimationFrame(() => header?.querySelector<HTMLButtonElement>('button[aria-expanded="true"]:not(:disabled)')?.focus());
+              }}
+            ><span aria-hidden="true">C</span></button>
+            <div className={workspace.brandCopy} aria-hidden={compactRail}>
+              <div className={workspace.brandMask}><span>Civic<em>Ledger.</em></span></div>
+              <p>Community Workspace</p>
+            </div>
+            <button
+              className={workspace.brandCollapse}
+              type="button"
+              disabled={compactRail}
+              aria-hidden={compactRail}
+              aria-label={lang === "en" ? "Collapse menu" : "Ringkas menu"}
+              aria-expanded={!compactRail}
+              onClick={(event) => {
+                const header = event.currentTarget.parentElement;
+                setCompactRail(true);
+                requestAnimationFrame(() => header?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]:not(:disabled)')?.focus());
+              }}
+            ><PanelLeftClose size={16} /></button>
+          </div>
+        ) : (
         <div className="h-16 px-4 flex items-center justify-between border-b border-line/60">
           <div className="flex items-center gap-2.5">
             <BrandLogo size={34} className="shrink-0 shadow-sm rounded-xl" />
@@ -1712,11 +1783,12 @@ export default function CivicLedgerApp() {
                     : "Portal Pemilik Toko"
                   : currentUser.role === "BENEFICIARY"
                     ? (lang === "en" ? "Aid Recipient Portal" : "Portal Warga Penerima")
-                    : organizer ? (lang === "en" ? "Community Aid & Digital Vouchers" : "Bantuan Warga & Voucher Digital") : t.portalSub}
+                    : t.portalSub}
               </span>
             </div>
           </div>
         </div>
+        )}
 
         {/* Profil Akun */}
         {!organizer && <div className="p-3.5 border-b border-line/50 bg-nested/45">
@@ -1756,15 +1828,8 @@ export default function CivicLedgerApp() {
           </div>
         </div>}
 
-        {organizer && <div className={workspace.railTools}>
-          <input type="search" placeholder={lang === "en" ? "Find menu…" : "Cari menu…"} aria-label={lang === "en" ? "Find menu" : "Cari menu"} value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} />
-          <button type="button" aria-label={compactRail ? "Perluas menu" : "Ringkas menu"} aria-expanded={!compactRail} onClick={() => { setMenuSearch(""); setCompactRail(!compactRail); }}>{compactRail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
-          <div className={workspace.railIcons}>{navItems.map(({ id, label, icon: Icon }) => <button type="button" key={id} aria-label={label} title={label} aria-current={id === activeTab ? "page" : undefined} onClick={() => setActiveTab(id)}><Icon className="w-[18px] h-[18px]" /></button>)}</div>
-        </div>}
-        {/* Navigasi */}
+        {organizer ? organizerNavigation() : (
         <nav className="flex-1 py-4 space-y-5 overflow-y-auto px-2.5">
-          {organizer && shortcuts.length > 0 && <div className={workspace.shortcuts}>{shortcuts.map(({ label, id, view, icon: Icon }) => <a key={label} href={"#" + id} onClick={(event) => { event.preventDefault(); gotoCoordinator(id, view); }}><Icon size={14} className="inline mr-2" />{label}</a>)}</div>}
-          {organizer && !visibleNav.length && !shortcuts.length && <p className="text-xs px-2">{lang === "en" ? "No matching menu." : "Menu tidak ditemukan."}</p>}
           {opsNav.length > 0 && (
             <div>
               <p className="px-2.5 mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
@@ -1843,6 +1908,7 @@ export default function CivicLedgerApp() {
             </div>
           )}
         </nav>
+        )}
 
         {/* Kontrol Bawah */}
         <div className="p-3.5 border-t border-line/60 bg-surface space-y-2.5">
@@ -2134,7 +2200,7 @@ export default function CivicLedgerApp() {
             >
               <LogOut className="w-4 h-4" />
             </button>
-            {organizer && <details className={workspace.profile}>
+            {organizer && <details ref={organizerSettings} className={workspace.profile}>
               <summary aria-label={lang === "en" ? "Account and settings" : "Akun dan pengaturan"}><span className={workspace.avatar}>{currentUser.name.charAt(0)}</span><strong>{currentUser.role_label}</strong></summary>
               <div onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
                 <strong>{currentUser.name}</strong>
@@ -2150,8 +2216,7 @@ export default function CivicLedgerApp() {
         </header>
         {organizer && <dialog ref={mobileNavigation} className={workspace.dialog} aria-labelledby="rail-title">
           <header className={workspace.dialogHead}><h2 id="rail-title">CivicLedger</h2><button type="button" onClick={() => mobileNavigation.current?.close()} aria-label={lang === "en" ? "Close" : "Tutup"}><CloseMenu size={18} /></button></header>
-          <nav className={workspace.mobileLinks}>{navItems.map(({ id, label }) => <button key={id} type="button" aria-current={id === activeTab ? "page" : undefined} onClick={() => { setActiveTab(id); mobileNavigation.current?.close(); }}>{label}</button>)}
-          {shortcuts.map(({ label, id, view }) => <button key={label} type="button" onClick={() => { mobileNavigation.current?.close(); gotoCoordinator(id, view); }}>{label}</button>)}</nav>
+          {organizerNavigation()}
         </dialog>}
 
         {/* Tab Mobile */}
