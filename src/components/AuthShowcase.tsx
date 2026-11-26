@@ -1,141 +1,193 @@
 ﻿"use client";
 
-import { useState, type PointerEvent } from "react";
-import { ArrowDownLeft, ArrowUpRight, Check, CloudUpload, Pause, Play, ShieldCheck, Ticket, Users } from "lucide-react";
-import BrandLogo from "./BrandLogo";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+import Image from "next/image";
+import { Pause, Play } from "lucide-react";
 import frame from "./AuthHeading.module.css";
 import styles from "./AuthShowcase.module.css";
 
-const distribution = [34, 57, 48, 72, 66, 92];
-const transactions = [
-  { id: "DEMO-8K2Q", amount: "Rp150.000", redemption: false },
-  { id: "DEMO-5U7C", amount: "Rp100.000", redemption: true },
-  { id: "DEMO-3N9P", amount: "Rp150.000", redemption: false },
-];
-
-function DecorativeCode() {
-  return (
-    <svg className={styles.codeArt} viewBox="0 0 64 64" aria-hidden="true">
-      <rect width="64" height="64" rx="9" fill="#fffaf0" />
-      <path fill="#202b39" d="M8 8h18v18H8zM38 38h18v18H38zM33 8h5v9h-5zM43 10h12v5H43zM45 19h6v9h-6zM30 23h8v11h-8zM10 33h13v6H10zM25 38h8v7h-8zM8 45h8v11H8zM21 50h15v6H21zM41 30h14v4H41z" />
-      <path fill="#fffaf0" d="M12 12h10v10H12zM42 42h10v10H42z" />
-      <path fill="#c92e25" d="M15 15h4v4h-4zM45 45h4v4h-4z" />
-    </svg>
-  );
-}
+const DESKTOP = "(min-width: 881px) and (hover: hover) and (prefers-reduced-motion: no-preference)";
 
 export default function AuthShowcase({ en }: { en: boolean }) {
   const [paused, setPaused] = useState(false);
+  const [enhanced, setEnhanced] = useState(false);
+  const scene = useRef<HTMLElement>(null);
+  const image = useRef<HTMLImageElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const pointer = useRef({ x: 0, y: 0 });
+  const motion = useRef({ paused: false, resume: () => {} });
 
-  function moveLight(event: PointerEvent<HTMLElement>) {
-    if (paused || event.pointerType !== "mouse" || !window.matchMedia("(min-width: 881px) and (hover: hover) and (prefers-reduced-motion: no-preference)").matches) return;
-    const panel = event.currentTarget;
-    const { left, top, width, height } = panel.getBoundingClientRect();
-    panel.style.setProperty("--pointer-x", ((event.clientX - left) / width * 2 - 1).toFixed(3));
-    panel.style.setProperty("--pointer-y", ((event.clientY - top) / height * 2 - 1).toFixed(3));
+  useEffect(() => {
+    const panel = scene.current;
+    const artwork = image.current;
+    const surface = canvas.current;
+    const shell = panel?.closest("main");
+    if (!panel || !artwork || !surface || !shell) return;
+
+    const desktop = window.matchMedia(DESKTOP);
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    let generation = 0;
+    let cleanup = () => {};
+
+    function start() {
+      generation++;
+      cleanup();
+      setEnhanced(false);
+      if (!desktop.matches || connection?.saveData || (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency < 4)) return;
+
+      const current = generation;
+      void Promise.all([artwork!.decode(), import("./auth-showcase-webgl")]).then(([, { createShowcaseRenderer }]) => {
+        if (current !== generation) return;
+        const renderer = createShowcaseRenderer(surface!, artwork!);
+        if (!renderer) return;
+
+        let frameId = 0;
+        let visible = true;
+        let last = 0;
+        let elapsed = 0;
+        let x = 0;
+        let y = 0;
+        let slideStart = -Infinity;
+        let slideDirection = 0;
+
+        function canAnimate() {
+          return visible && !document.hidden && !motion.current.paused;
+        }
+
+        function draw(now: number) {
+          frameId = 0;
+          if (!canAnimate()) return;
+          const delta = last ? Math.min(now - last, 50) : 16;
+          elapsed += delta;
+          last = now;
+          const blend = 1 - Math.exp(-delta / 180);
+          x += (pointer.current.x - x) * blend;
+          y += (pointer.current.y - y) * blend;
+          const slide = Math.sin(Math.PI * Math.min((now - slideStart) / 800, 1)) * slideDirection;
+          const progress = 1 - Math.pow(1 - Math.min(elapsed / 1400, 1), 3);
+          renderer!.draw(x + slide * .38, y - Math.abs(slide) * .12, progress, elapsed / 1000);
+          frameId = requestAnimationFrame(draw);
+        }
+
+        function resume() {
+          if (canAnimate() && !frameId) {
+            last = 0;
+            frameId = requestAnimationFrame(draw);
+          } else if (!canAnimate() && frameId) {
+            cancelAnimationFrame(frameId);
+            frameId = 0;
+          }
+        }
+
+        function resize() {
+          if (!panel!.clientWidth || !panel!.clientHeight) return;
+          renderer!.resize(panel!.clientWidth, panel!.clientHeight);
+          renderer!.draw(x, y, 1, elapsed / 1000);
+        }
+
+        const size = new ResizeObserver(resize);
+        size.observe(panel!);
+        const viewport = new IntersectionObserver(([entry]) => {
+          visible = entry.isIntersecting;
+          resume();
+        });
+        viewport.observe(panel!);
+        const transition = new MutationObserver(() => {
+          slideStart = performance.now();
+          slideDirection = shell!.dataset.register === "true" ? 1 : -1;
+          pointer.current = { x: 0, y: 0 };
+        });
+        transition.observe(shell!, { attributes: true, attributeFilter: ["data-register"] });
+
+        function fallback() {
+          cleanup();
+          setEnhanced(false);
+        }
+
+        cleanup = () => {
+          cancelAnimationFrame(frameId);
+          size.disconnect();
+          viewport.disconnect();
+          transition.disconnect();
+          document.removeEventListener("visibilitychange", resume);
+          surface!.removeEventListener("webglcontextlost", fallback);
+          renderer.dispose();
+          motion.current.resume = () => {};
+          cleanup = () => {};
+        };
+
+        surface!.addEventListener("webglcontextlost", fallback);
+        document.addEventListener("visibilitychange", resume);
+        motion.current.resume = resume;
+        resize();
+        setEnhanced(true);
+        resume();
+      }).catch(() => {
+        if (current === generation) {
+          cleanup();
+          setEnhanced(false);
+        }
+      });
+    }
+
+    start();
+    desktop.addEventListener("change", start);
+    return () => {
+      generation++;
+      cleanup();
+      desktop.removeEventListener("change", start);
+    };
+  }, []);
+
+  function resetPointer() {
+    pointer.current = { x: 0, y: 0 };
   }
 
-  function resetLight(panel: HTMLElement) {
-    panel.style.removeProperty("--pointer-x");
-    panel.style.removeProperty("--pointer-y");
+  function movePointer(event: PointerEvent<HTMLElement>) {
+    if (!enhanced || paused || event.pointerType !== "mouse") return;
+    const { left, top, width, height } = event.currentTarget.getBoundingClientRect();
+    pointer.current = {
+      x: Math.max(-1, Math.min(1, 2 * (event.clientX - left) / width - 1)),
+      y: Math.max(-1, Math.min(1, 2 * (event.clientY - top) / height - 1)),
+    };
   }
 
   return (
     <aside
+      ref={scene}
       className={`${frame.showcase} ${styles.scene}`}
-      aria-labelledby="showcase-title"
-      aria-describedby="showcase-demo"
-      data-paused={paused}
-      onPointerMove={moveLight}
-      onPointerLeave={(event) => resetLight(event.currentTarget)}
+      aria-label={en ? "CivicLedger product preview" : "Pratinjau produk CivicLedger"}
+      data-enhanced={enhanced}
+      onPointerMove={movePointer}
+      onPointerLeave={resetPointer}
     >
-      <div className={styles.atmosphere} aria-hidden="true">
-        <div className={styles.ribbon} />
-        <div className={styles.reflection} />
-      </div>
-
-      <header className={styles.identity}>
-        <BrandLogo size={36} className={styles.logo} />
-        <div>
-          <h2 id="showcase-title">CivicLedger</h2>
-          <p>{en ? "Community Aid & Digital Vouchers" : "Bantuan Warga & Voucher Digital"}</p>
-        </div>
-      </header>
-
-      <div className={styles.depth}>
-        <section className={`${styles.card} ${styles.analytics}`}>
-          <div className={styles.cardHeader}>
-            <span className={styles.icon}><ArrowUpRight size={19} /></span>
-            <div><h3>{en ? "Aid distribution" : "Distribusi bantuan"}</h3><p>{en ? "Monthly overview" : "Ringkasan bulanan"}</p></div>
-          </div>
-          <div className={styles.chart} aria-hidden="true">
-            {distribution.map((height, index) => <span key={index} style={{ height: height + "%" }} />)}
-          </div>
-          <div className={styles.months} aria-hidden="true">
-            {(en ? ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] : ["Jul", "Agu", "Sep", "Okt", "Nov", "Des"]).map((month) => <span key={month}>{month}</span>)}
-          </div>
-          <div className={styles.analyticsStats}>
-            <div><small>{en ? "Voucher value" : "Nilai kupon"}</small><strong>Rp48,6 jt</strong></div>
-            <div><small>{en ? "Recipients" : "Penerima"}</small><strong>1.248</strong></div>
-          </div>
-        </section>
-
-        <section className={`${styles.card} ${styles.total}`}>
-          <Ticket size={21} />
-          <h3>{en ? "Total aid distributed" : "Total penyaluran bantuan"}</h3>
-          <strong className={styles.figure}>Rp48,6 jt</strong>
-          <p>{en ? "Registered food vouchers" : "Kupon sembako tercatat"}</p>
-        </section>
-
-        <section className={`${styles.card} ${styles.activity}`}>
-          <div className={styles.cardHeader}>
-            <span className={styles.icon}><ArrowDownLeft size={18} /></span>
-            <div><h3>{en ? "Transaction activity" : "Aktivitas transaksi"}</h3><p>{en ? "Distribution and redemption" : "Penyaluran dan penukaran"}</p></div>
-          </div>
-          <ul>
-            {transactions.map(({ id, amount, redemption }) => (
-              <li key={id}>
-                <div><strong>{redemption ? (en ? "Voucher redeemed" : "Kupon ditukar") : (en ? "Voucher distributed" : "Kupon disalurkan")}</strong><code>{id}</code></div>
-                <code>{amount}</code>
-                <Check size={15} className={styles.verified} aria-label={en ? "Verified" : "Terverifikasi"} />
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className={`${styles.card} ${styles.beneficiaries}`}>
-          <span className={styles.icon}><Users size={19} /></span>
-          <div><h3>{en ? "Registered recipients" : "Penerima terdaftar"}</h3><strong className={styles.figure}>1.248</strong></div>
-        </section>
-
-        <section className={`${styles.card} ${styles.voucher}`}>
-          <div className={styles.voucherContent}>
-            <div className={styles.voucherTop}><Ticket size={26} /><span>DEMO</span></div>
-            <div className={styles.voucherMain}>
-              <div><h3>{en ? "Food voucher" : "Kupon sembako"}</h3><strong className={styles.figure}>Rp150.000</strong><code>VCR-DEMO</code></div>
-              <DecorativeCode />
-            </div>
-          </div>
-        </section>
-
-        <section className={`${styles.card} ${styles.sync}`}>
-          <div className={styles.cardHeader}>
-            <span className={styles.icon}><CloudUpload size={20} /></span>
-            <div><h3>{en ? "Verification and sync" : "Verifikasi dan sinkronisasi"}</h3><p>{en ? "Offline transactions" : "Transaksi offline"}</p></div>
-          </div>
-          <span className={styles.syncStatus}><ShieldCheck size={15} /> {en ? "Synced" : "Tersinkron"}</span>
-        </section>
-      </div>
-
-      <footer className={styles.controls}>
-        <p id="showcase-demo">{en ? "Product preview · Demo data" : "Pratinjau produk · Data demo"}</p>
-        <button type="button" aria-pressed={paused} aria-label={en ? "Pause showcase animation" : "Jeda animasi pratinjau"} title={paused ? (en ? "Resume animation" : "Lanjutkan animasi") : (en ? "Pause animation" : "Jeda animasi")} onClick={(event) => {
-          resetLight(event.currentTarget.closest("aside")!);
-          setPaused(!paused);
-        }}>
-          {paused ? <Play size={15} aria-hidden="true" /> : <Pause size={15} aria-hidden="true" />}
+      <Image
+        ref={image}
+        src="/images/auth/civicledger-showcase.webp"
+        alt={en ? "CivicLedger tablet dashboard and red food voucher. All figures are demo data." : "Dasbor CivicLedger pada tablet dan kupon sembako merah. Semua angka adalah data demo."}
+        fill
+        priority
+        unoptimized
+        className={styles.artwork}
+      />
+      <canvas ref={canvas} className={styles.canvas} aria-hidden="true" />
+      {enhanced && (
+        <button
+          className={styles.pause}
+          type="button"
+          aria-pressed={paused}
+          aria-label={en ? "Pause showcase animation" : "Jeda animasi pratinjau"}
+          title={paused ? (en ? "Resume animation" : "Lanjutkan animasi") : (en ? "Pause animation" : "Jeda animasi")}
+          onClick={() => {
+            resetPointer();
+            motion.current.paused = !motion.current.paused;
+            setPaused(motion.current.paused);
+            motion.current.resume();
+          }}
+        >
+          {paused ? <Play size={16} aria-hidden="true" /> : <Pause size={16} aria-hidden="true" />}
         </button>
-      </footer>
+      )}
     </aside>
   );
 }

@@ -14,6 +14,7 @@ import {
   Check,
   UserPlus,
   LogIn,
+  LoaderCircle,
   X,
 } from "lucide-react";
 import { AuthRole, AuthUser } from "@/lib/types";
@@ -333,7 +334,7 @@ export default function AuthGate({
           )}
           {/* FORM MASUK */}
           {mode === "LOGIN" && (
-            <form onSubmit={handleLoginSubmit} className={styles.form}>
+            <form onSubmit={handleLoginSubmit} className={styles.form} aria-busy={busy}>
               <div className={styles.intro}>
                 <p className={styles.eyebrow}>{t.auth.loginEyebrow}</p>
                 <h2 className={styles.title}>
@@ -410,7 +411,11 @@ export default function AuthGate({
                 disabled={busy}
                 className="w-full h-12 rounded-xl hover:opacity-90 active:scale-[0.99] font-semibold text-sm flex items-center justify-center gap-2 transition shadow-sm"
               >
-                <LogIn className="w-4 h-4" />
+                {busy ? (
+                  <LoaderCircle className={styles.spinner} aria-hidden="true" />
+                ) : (
+                  <LogIn className={styles.loginArrow} aria-hidden="true" />
+                )}
                 <span>{busy ? t.auth.loginBusy : t.auth.loginBtn}</span>
               </button>
               <div className={styles.google}>
@@ -621,7 +626,7 @@ export default function AuthGate({
 
           {/* FORM DAFTAR */}
           {mode === "REGISTER" && (
-            <form onSubmit={handleRegisterSubmit} className={styles.form}>
+            <form onSubmit={handleRegisterSubmit} className={styles.form} aria-busy={busy}>
               <div>
                 <h2 className="text-lg font-bold">
                   {en ? "Create your account" : "Daftar Akun Baru"}
