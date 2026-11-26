@@ -67,10 +67,12 @@ import {
 import AuthGate from "@/components/AuthGate";
 import BrandLogo from "@/components/BrandLogo";
 import CoordinatorTab from "@/components/CoordinatorTab";
+import { getOperationalReminders } from "@/components/CoordinatorOverview";
+import { Bell, Store as PartnerStore, Users } from "lucide-react";
 import type { ResourceView } from "@/components/CoordinatorResources";
 import CoordinatorSearch from "@/components/CoordinatorSearch";
 import workspace from "@/components/CoordinatorWorkspace.module.css";
-import { Menu, PanelLeftClose, Plus, Settings, X as CloseMenu } from "lucide-react";
+import { Menu, PanelLeftClose, Settings, X as CloseMenu } from "lucide-react";
 import BeneficiaryTab from "@/components/BeneficiaryTab";
 import MerchantPosTab from "@/components/MerchantPosTab";
 import ClearinghouseTab from "@/components/ClearinghouseTab";
@@ -1653,7 +1655,7 @@ export default function CivicLedgerApp() {
         onToggleLargeText={updateLargeText}
         onAuthenticated={(user) => {
           applyAuthenticatedUser(user);
-          showToast("success", `Halo, ${user.name} (${user.role_label}).`);
+          if (user.role !== "COORDINATOR") showToast("success", `Halo, ${user.name} (${user.role_label}).`);
         }}
       />
     );
@@ -1666,13 +1668,11 @@ export default function CivicLedgerApp() {
     setCpError("");
     setShowChangePasswordModal(true);
   };
-  function gotoCoordinator(id: string, view?: ResourceView, open = false) {
+  function gotoCoordinator(id: string, view?: ResourceView) {
     setActiveTab("COORDINATOR");
     if (view) { setCoordinatorRightView(view); setFullCoordinatorResources(true); }
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const target = document.getElementById(id);
-      if (open) target?.click();
-      else target?.scrollIntoView({ block: "start" });
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
     }));
   }
   function openOrganizerSettings() {
@@ -1683,6 +1683,7 @@ export default function CivicLedgerApp() {
     settings.querySelector("summary")?.focus();
   }
 
+  const reminders = organizer ? getOperationalReminders(vouchers, offlineQueue.length, lang === "en") : [];
   function organizerNavigation() {
     const groups = [
       { name: "Workspace", entries: opsNav },
@@ -1706,6 +1707,15 @@ export default function CivicLedgerApp() {
                 </button>
               );
             })}
+            {name === "Workspace" && [
+              { view: "VOUCHERS", label: lang === "en" ? "Manage Vouchers" : "Kelola Kupon", icon: QrCode },
+              { view: "BENEFICIARIES", label: lang === "en" ? "Recipient Records" : "Data Warga", icon: Users },
+              { view: "MERCHANTS", label: lang === "en" ? "Partner Stores" : "Kedai Mitra", icon: PartnerStore },
+            ].map(({ view, label, icon: Icon }) => (
+              <button key={view} type="button" title={label} aria-label={label} onClick={() => { mobileNavigation.current?.close(); gotoCoordinator("coordinator-operations", view as ResourceView); }}>
+                <Icon size={18} /><span>{label}</span>
+              </button>
+            ))}
           </div>
         ))}
         <div className={workspace.navGroup}>
@@ -2171,7 +2181,6 @@ export default function CivicLedgerApp() {
               {isOfflineMode ? "Offline" : "Online"}
             </button>
 
-            {organizer && <button type="button" className={workspace.quick} aria-label={lang === "en" ? "Issue voucher" : "Buat Kupon"} onClick={() => gotoCoordinator("coordinator-issue-trigger", undefined, true)}><Plus size={15} /> <span>{lang === "en" ? "Issue" : "Buat Kupon"}</span></button>}
             <span
               title="Seluruh data di website ini adalah data contoh simulasi untuk STACK 2026."
               className="hidden md:inline-flex items-center px-3 py-1.5 rounded-full bg-nested border border-line/60 text-[11px] font-semibold text-ink-secondary"
@@ -2200,6 +2209,13 @@ export default function CivicLedgerApp() {
             >
               <LogOut className="w-4 h-4" />
             </button>
+            {organizer && <details className={workspace.notifications}>
+              <summary aria-label={lang === "en" ? "Notifications" : "Notifikasi"}><Bell size={17} />{reminders.length > 0 && <i aria-hidden="true" />}</summary>
+              <div><strong>{lang === "en" ? "Operational notifications" : "Notifikasi operasional"}</strong>
+                {reminders.length ? <ul>{reminders.map(reminder => <li key={reminder.key}>{reminder.count} {reminder.label}</li>)}</ul> : <p>{lang === "en" ? "No reminders right now." : "Belum ada pengingat."}</p>}
+                <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); gotoCoordinator("coordinator-reminders"); }}>{lang === "en" ? "View reminders" : "Lihat pengingat"}</button>
+              </div>
+            </details>}
             {organizer && <details ref={organizerSettings} className={workspace.profile}>
               <summary aria-label={lang === "en" ? "Account and settings" : "Akun dan pengaturan"}><span className={workspace.avatar}>{currentUser.name.charAt(0)}</span><strong>{currentUser.role_label}</strong></summary>
               <div onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
@@ -2309,6 +2325,7 @@ export default function CivicLedgerApp() {
                 {/* TAB 1: BERANDA PENGURUS */}
                 {activeTab === "COORDINATOR" && (
                   <CoordinatorTab
+                    pendingSync={offlineQueue.length}
                     ledger={ledger}
                     onReports={() => setActiveTab("REPORTS")}
                     lang={lang}

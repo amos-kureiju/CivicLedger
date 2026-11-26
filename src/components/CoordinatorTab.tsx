@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
+import { CheckCircle2, RefreshCw } from "lucide-react";
 import {
   ChevronDown,
   Plus,
@@ -25,12 +27,14 @@ import { formatRupiah } from "@/lib/formatters";
 
 import CoordinatorAnalytics from "./CoordinatorAnalytics";
 import styles from "./CoordinatorWorkspace.module.css";
+import CoordinatorOverview from "./CoordinatorOverview";
+import overview from "./CoordinatorOverview.module.css";
 import CoordinatorResources, { type ResourceView } from "./CoordinatorResources";
 import resourceStyles from "./CoordinatorResources.module.css";
 
 function MetricValue({ value, currency = false }: { value: number; currency?: boolean }) {
-  const current = React.useRef(value);
-  const [display, setDisplay] = React.useState(value);
+  const current = React.useRef(0);
+  const [display, setDisplay] = React.useState(0);
 
   React.useEffect(() => {
     const start = current.current;
@@ -56,6 +60,7 @@ function MetricValue({ value, currency = false }: { value: number; currency?: bo
 }
 
 interface CoordinatorTabProps {
+  pendingSync: number;
   ledger: LedgerEntry[];
   onReports: () => void;
   lang: AppLang;
@@ -118,6 +123,7 @@ interface CoordinatorTabProps {
 }
 
 export default function CoordinatorTab({
+  pendingSync,
   ledger,
   onReports,
   lang,
@@ -211,124 +217,43 @@ export default function CoordinatorTab({
 
   return (
     <div className={styles.workspace} id="coordinator-home">
-      <header className={styles.heading}>
-        <div>
-          <p>{currentUser.name} · {currentUser.role_label}</p>
-          <h1><span>{en ? <>Organizer <em>Dashboard.</em></> : <>Dashboard <em>Pengurus.</em></>}</span></h1>
-          <p>{en ? "Manage social aid distribution and digital vouchers." : "Kelola penyaluran bantuan sosial dan voucher digital untuk warga."}</p>
-        </div>
-        <div className={styles.headingActions}>
-          <span className="text-xs font-bold">{isOfflineMode ? (en ? "Offline simulation" : "Simulasi offline") : (en ? "Online mode" : "Mode online")}</span>
-          <button id="coordinator-issue-trigger" type="button" onClick={() => openCreation("VOUCHERS")}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
-          <button type="button" onClick={() => openCreation("FUNDS")}><Wallet size={16} />{en ? "Add funds" : "Tambah Dana"}</button>
-        </div>
-      </header>
-
-      {/* 4 Summary Cards */}
-      <div className={styles.metrics} id="coordinator-metrics">
-        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink-secondary">
-              {en ? "Aid Pool Balance" : "Sisa Dana Bansos"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
+      <div className={overview.layout}>
+        <div className={overview.primary}>
+          <header className={overview.hero}>
+            <div className={overview.heroCopy}>
+              <h1>{en ? "Hello," : "Halo,"} <em>{currentUser.name}!</em></h1>
+              <p>{en ? "Manage social aid, voucher distribution, and partner store activity with ease." : "Kelola bantuan sosial, distribusi kupon, dan aktivitas kedai mitra dengan lebih mudah."}</p>
+              <button id="coordinator-issue-trigger" type="button" onClick={() => openCreation("VOUCHERS")}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
             </div>
-          </div>
-          <div>
-            <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              <MetricValue value={poolTotalIdr} currency />
-            </p>
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <p className="text-xs text-ink-muted">
-                {en ? "Dynamic aid pool" : "Dana sembako dinamis"}
-              </p>
-              <button type="button" onClick={() => openCreation("FUNDS")} className="text-xs font-bold text-emeraldTech hover:underline">
-                {en ? "+ Top Up" : "+ Tambah Dana"}
-              </button>
+            <div className={overview.art} aria-hidden="true">
+              <Image src="/images/auth/civicledger-showcase.webp" alt="" fill sizes="(max-width: 640px) 42vw, 350px" />
             </div>
-          </div>
+          </header>
+          <section className={overview.metrics} id="coordinator-metrics" aria-label={en ? "Operational summary" : "Ringkasan operasional"}>
+            {[
+              { label: en ? "Aid Pool Balance" : "Sisa Dana Bansos", value: poolTotalIdr, currency: true, icon: Wallet, funds: true },
+              { label: en ? "Active Vouchers" : "Kupon Siap Pakai", value: activeVouchersCount, icon: Ticket, note: en ? "Available for use" : "Tersedia untuk digunakan" },
+              { label: en ? "Registered Recipients" : "Penerima Terdaftar", value: beneficiaries.length, icon: UserCheck, note: en ? "Registered residents" : "Warga terdaftar" },
+              { label: en ? "Store Spending" : "Belanja di Kedai", value: totalWarungTurnover, currency: true, icon: Store, note: en ? "Partner store turnover" : "Transaksi kedai mitra" },
+              { label: en ? "Redeemed Vouchers" : "Kupon Sudah Dipakai", value: vouchers.filter(v => v.status === "REDEEMED" || v.status === "SETTLED").length, icon: CheckCircle2, note: en ? "Redeemed and settled" : "Ditukar dan sudah cair" },
+              { label: en ? "Offline Sync" : "Sinkronisasi Offline", value: pendingSync, icon: RefreshCw, note: en ? "Awaiting sync" : "Menunggu sinkronisasi" },
+            ].map(({ label, value, currency, icon: Icon, note, funds }, index) => (
+              <article className={overview.metric} key={label} style={{ "--stagger": index * 65 + "ms" } as React.CSSProperties}>
+                <h2>{label}</h2><span className={overview.metricIcon}><Icon size={15} aria-hidden="true" /></span>
+                <strong><MetricValue value={value} currency={currency} /></strong>
+                {funds ? <button type="button" onClick={() => openCreation("FUNDS")}>{en ? "Add funds" : "Tambah Dana"}</button> : <p>{note}</p>}
+              </article>
+            ))}
+          </section>
+          <CoordinatorAnalytics vouchers={vouchers} ledger={ledger} turnover={totalWarungTurnover} merchantCount={merchants.length} en={en} onReports={onReports} />
         </div>
-
-        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink-secondary">
-              {en ? "Active Vouchers" : "Kupon Siap Pakai"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
-              <Ticket className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              <MetricValue value={activeVouchersCount} />
-            </p>
-            <p className="text-xs text-ink-muted mt-1 tabular-nums">
-              {en
-                ? `Out of ${vouchers.length} issued`
-                : `Dari ${vouchers.length} kupon dibuat`}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink-secondary">
-              {en ? "Local Stall Turnover" : "Belanja di Kedai"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-amberTech/12 text-amberTech flex items-center justify-center">
-              <Store className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              <MetricValue value={totalWarungTurnover} currency />
-            </p>
-            <p className="text-xs text-ink-muted mt-1 tabular-nums">
-              {en
-                ? `${merchants.length} partner stalls registered`
-                : `${merchants.length} kedai mitra terdaftar`}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink-secondary">
-              {en ? "Beneficiaries" : "Penerima Bansos"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-emeraldTech/12 text-emeraldTech flex items-center justify-center">
-              <UserCheck className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              <MetricValue value={beneficiaries.length} /> {en ? "Households" : "Orang"}
-            </p>
-            <p
-              className={`text-xs mt-1 flex items-center gap-1.5 font-medium tabular-nums ${
-                fraudBlockedCount > 0 ? "text-amberTech" : "text-emeraldTech"
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  fraudBlockedCount > 0 ? "bg-amberTech" : "bg-emeraldTech"
-                }`}
-              />
-              {en
-                ? `${fraudBlockedCount} invalid/duplicate blocked`
-                : `${fraudBlockedCount} kupon bermasalah ditolak`}
-            </p>
-          </div>
-        </div>
+        <CoordinatorOverview en={en} vouchers={vouchers} beneficiaries={beneficiaries} merchants={merchants} ledger={ledger} pending={pendingSync}
+          onVoucher={onOpenVoucherCard} onResource={(view) => {
+            setCoordinatorRightView(view);
+            onFullResources();
+            document.getElementById("coordinator-operations")?.scrollIntoView({ block: "start" });
+          }} />
       </div>
-
-      <CoordinatorAnalytics vouchers={vouchers} ledger={ledger} en={en} onOpen={onOpenVoucherCard} onReports={onReports} onAll={() => {
-        onFullResources();
-        setCoordinatorRightView("VOUCHERS");
-        document.getElementById("coordinator-operations")?.scrollIntoView({ block: "start" });
-      }} />
-
 
       <CoordinatorResources en={en} view={coordinatorRightView} onView={setCoordinatorRightView} preview={!fullResources} onFullView={onFullResources}
         vouchers={vouchers} beneficiaries={beneficiaries} filteredVouchers={filteredVouchers} filteredBeneficiaries={filteredBeneficiaries} merchants={merchants} packages={catalog}

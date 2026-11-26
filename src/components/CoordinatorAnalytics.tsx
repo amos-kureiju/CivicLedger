@@ -1,146 +1,188 @@
-﻿"use client";
+"use client";
 
-import { useId, useMemo, useState } from "react";
-import { ArrowUpRight, Ticket } from "lucide-react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
+import { ArrowUpRight, Store, Ticket } from "lucide-react";
 import { formatRupiah, formatStatusLabel } from "@/lib/formatters";
 import type { LedgerEntry, Voucher, VoucherStatus } from "@/lib/types";
-import styles from "./CoordinatorWorkspace.module.css";
+import styles from "./CoordinatorBento.module.css";
 
 const statuses: { id: VoucherStatus; color: string }[] = [
   { id: "ACTIVE", color: "#8dc7ec" }, { id: "REDEEMED", color: "#f04438" },
-  { id: "SETTLED", color: "#334967" }, { id: "EXPIRED", color: "#a5aebc" },
+  { id: "SETTLED", color: "#526887" }, { id: "EXPIRED", color: "#a5aebc" },
 ];
+const dayMs = 86400000;
+const validTime = (value?: string | null) => {
+  const time = Date.parse(value ?? "");
+  return Number.isFinite(time) ? time : null;
+};
 
-export default function CoordinatorAnalytics({ vouchers, ledger, en, onOpen, onAll, onReports }: {
+export default function CoordinatorAnalytics({ vouchers, ledger, turnover, merchantCount, en, onReports }: {
   vouchers: Voucher[];
   ledger: LedgerEntry[];
+  turnover: number;
+  merchantCount: number;
   en: boolean;
-  onOpen: (voucher: Voucher) => void;
-  onAll: () => void;
   onReports: () => void;
 }) {
-  const headingId = useId();
+  const title = useId();
+  const gradient = useId();
   const [period, setPeriod] = useState(6);
-  const { counts, recent, months } = useMemo(() => {
+  const [active, setActive] = useState<number | null>(null);
+  const locale = en ? "en" : "id";
+  const { counts, months, timeline } = useMemo(() => {
     const counts: Record<VoucherStatus, number> = { ACTIVE: 0, REDEEMED: 0, SETTLED: 0, EXPIRED: 0 };
-    const validMonth = (value: string) => {
-      const date = new Date(value);
-      return Number.isFinite(date.getTime()) ? date.getUTCFullYear() * 12 + date.getUTCMonth() : null;
+    const events = vouchers.flatMap(voucher => [
+      { time: validTime(voucher.issued_at), value: voucher.nominal_idr, issued: 1 },
+      { time: validTime(voucher.redeemed_at), value: 0, issued: 0 },
+    ]).filter((event): event is { time: number; value: number; issued: number } => event.time !== null);
+    for (const voucher of vouchers) counts[voucher.status]++;
+    if (!events.length) return { counts, months: [], timeline: { rows: [], daily: false } };
+
+    const monthKey = (time: number) => {
+      const date = new Date(time);
+      return date.getUTCFullYear() * 12 + date.getUTCMonth();
     };
-    const dates = [...vouchers.flatMap(v => [v.issued_at, v.redeemed_at ?? ""]), ...ledger.map(entry => entry.timestamp)];
-    const latest = dates.reduce((result, date) => Math.max(result, validMonth(date) ?? -1), -1);
-    const months = latest < 0 ? [] : Array.from({ length: period }, (_, index) => {
-      const key = latest - period + index + 1;
-      const date = new Date(Date.UTC(Math.floor(key / 12), key % 12, 1));
-      return { key, date, issued: 0, issuedValue: 0, redeemed: 0, spending: 0, synced: 0 };
+    const latest = events.reduce((max, event) => Math.max(max, event.time), -Infinity);
+    const monthEnd = monthKey(latest);
+    const months = Array.from({ length: period }, (_, i) => {
+      const key = monthEnd - period + i + 1;
+      return { key, date: new Date(Date.UTC(Math.floor(key / 12), key % 12, 1)), issued: 0, redeemed: 0, value: 0 };
     });
-    const byMonth = new Map(months.map(month => [month.key, month]));
-    for (const voucher of vouchers) {
-      counts[voucher.status]++;
-      const issue = byMonth.get(validMonth(voucher.issued_at) ?? -1);
-      if (issue) { issue.issued++; issue.issuedValue += voucher.nominal_idr; }
-      const redemption = byMonth.get(validMonth(voucher.redeemed_at ?? "") ?? -1);
-      if (redemption) redemption.redeemed++;
+    const daily = new Set(events.map(event => monthKey(event.time))).size <= 1;
+    const dailyEnd = Math.floor(latest / dayMs);
+    const dailyRows = Array.from({ length: 7 }, (_, i) => {
+      const key = dailyEnd - 6 + i;
+      return { key, date: new Date(key * dayMs), issued: 0, redeemed: 0, value: 0 };
+    });
+    const monthlyByKey = new Map(months.map(month => [month.key, month]));
+    const dailyByKey = new Map(dailyRows.map(day => [day.key, day]));
+    for (const event of events) {
+      const month = monthlyByKey.get(monthKey(event.time));
+      const day = dailyByKey.get(Math.floor(event.time / dayMs));
+      for (const bucket of [month, day]) {
+        if (!bucket) continue;
+        bucket.value += event.value;
+        if (event.issued) bucket.issued++; else bucket.redeemed++;
+      }
     }
-    for (const entry of ledger) {
-      const month = byMonth.get(validMonth(entry.timestamp) ?? -1);
-      if (month) { month.spending += entry.nominal_idr; if (entry.sync_mode === "OFFLINE_BATCH_SYNC") month.synced++; }
-    }
-    return {
-      counts, months,
-      recent: [...vouchers].sort((a, b) => b.issued_at.localeCompare(a.issued_at)).slice(0, 4),
-    };
-  }, [ledger, period, vouchers]);
-  const labels = new Intl.DateTimeFormat(en ? "en" : "id", { month: "short", year: "2-digit", timeZone: "UTC" });
-  const amountMax = Math.max(1, ...months.map(month => month.issuedValue));
-  const countMax = Math.max(1, ...months.flatMap(month => [month.issued, month.redeemed]));
-  const spendMax = Math.max(1, ...months.map(month => month.spending));
+    return { counts, months, timeline: { rows: daily ? dailyRows : months, daily } };
+  }, [period, vouchers]);
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short", year: "2-digit", timeZone: "UTC" });
+  const dateFormatter = new Intl.DateTimeFormat(locale, timeline.daily
+    ? { day: "numeric", month: "short", timeZone: "UTC" }
+    : { month: "short", year: "2-digit", timeZone: "UTC" });
+  const amountMax = months.reduce((max, row) => Math.max(max, row.value), 1);
+  const countMax = timeline.rows.reduce((max, row) => Math.max(max, row.issued, row.redeemed), 1);
+  const countTicks = Array.from(new Set([countMax, Math.round(countMax * .75), Math.round(countMax * .5), Math.round(countMax * .25), 0]));
+  const issued = timeline.rows.reduce((sum, row) => sum + row.issued, 0);
+  const redeemed = timeline.rows.reduce((sum, row) => sum + row.redeemed, 0);
+  const storeTotals = new Map<string, { name: string; value: number }>();
+  for (const entry of ledger) {
+    const previous = storeTotals.get(entry.merchant_id);
+    storeTotals.set(entry.merchant_id, { name: entry.merchant_name, value: (previous?.value ?? 0) + entry.nominal_idr });
+  }
+  const topStores = [...storeTotals.entries()].sort((a, b) => b[1].value - a[1].value).slice(0, 3);
+  const offlineSynced = ledger.filter(entry => entry.sync_mode === "OFFLINE_BATCH_SYNC").length;
+  const empty = en ? "No recorded data." : "Belum ada data tercatat.";
+  const x = (index: number) => 12 + 276 * index / Math.max(1, timeline.rows.length - 1);
+  const y = (value: number) => 124 - 108 * value / countMax;
+  const points = (field: "issued" | "redeemed") => timeline.rows.map((row, index) => `${x(index)},${y(row[field])}`).join(" ");
   let arcStart = 0;
-  const empty = en ? "No recorded data for this period." : "Belum ada data tercatat untuk periode ini.";
 
   return (
-    <section className={styles.analytics} id="coordinator-analytics" aria-labelledby={headingId}>
-      <h2 id={headingId}>{en ? "Distribution analytics" : "Analitik penyaluran"}</h2>
-      <div className={styles.modules}>
-        <article className={styles.module}>
-          <h3>{en ? "Voucher status" : "Status Distribusi Kupon"}</h3>
+    <section id="coordinator-analytics" aria-labelledby={title} className={styles.analytics}>
+      <h2 id={title}>{en ? "Distribution analytics" : "Analitik penyaluran"}</h2>
+      <div className={styles.grid}>
+        <article className={`${styles.card} ${styles.status}`}>
+          <div className={styles.icon}><Ticket size={18} aria-hidden="true" /></div>
+          <h3>{en ? "Voucher Distribution Status" : "Status Distribusi Kupon"}</h3>
           <div className={styles.ring}>
-            <svg viewBox="0 0 120 120" aria-hidden="true">
-              <circle cx="60" cy="60" r="49" fill="none" stroke="var(--line-soft)" strokeWidth="13" />
-              {statuses.map(({ id, color }) => {
+            <svg viewBox="0 0 130 130" aria-hidden="true">
+              <circle cx="65" cy="65" r="51" fill="none" stroke="var(--line-soft)" strokeWidth="15" />
+              {statuses.map(({ id, color }, index) => {
                 const share = vouchers.length ? counts[id] / vouchers.length * 100 : 0;
                 const offset = arcStart;
                 arcStart += share;
-                return share > 0 && <circle key={id} cx="60" cy="60" r="49" fill="none" stroke={color} strokeWidth="13" pathLength="100" strokeDasharray={`${share} ${100 - share}`} strokeDashoffset={-offset} transform="rotate(-90 60 60)" />;
+                const gap = share >= 6 && share < 100 ? 3.2 : 0;
+                const length = Math.max(0, share - gap);
+                return length > 0 && (
+                  <circle key={id} cx="65" cy="65" r="51" fill="none" stroke={color} strokeWidth="15" strokeLinecap={gap ? "round" : "butt"} pathLength="100"
+                    strokeDasharray={`${length} ${100 - length}`} strokeDashoffset={-offset - gap / 2} transform="rotate(-90 65 65)"
+                    style={{ "--arc": length, "--arc-delay": `${140 + index * 70}ms` } as CSSProperties} />
+                );
               })}
             </svg>
-            <div><strong>{vouchers.length}</strong><small>{en ? "Vouchers" : "Kupon"}</small></div>
+            <div><strong>{vouchers.length}</strong><span>{en ? "Vouchers" : "Total kupon"}</span></div>
           </div>
-          <ul className={styles.legend}>{statuses.map(({ id, color }) => <li key={id}><i style={{ background: color }} />{formatStatusLabel(id, en ? "en" : "id")}<strong>{counts[id]}</strong></li>)}</ul>
+          <ul className={styles.legend}>{statuses.map(({ id, color }) => <li key={id}><i style={{ background: color }} />{formatStatusLabel(id, locale)}<strong>{counts[id]}</strong></li>)}</ul>
         </article>
 
-        <article className={styles.module}>
-          <h3>{en ? "Monthly aid distribution" : "Distribusi Bantuan per Bulan"}</h3>
-          <p className={styles.muted}>{en ? "Issued voucher value · IDR" : "Nilai kupon diterbitkan · Rupiah"}</p>
-          {!months.length ? <p className={styles.empty}>{empty}</p> : <div className={styles.bars}>
-            {months.map((month) => <div key={month.key} className={styles.barColumn}>
-              <button type="button" data-empty={month.issuedValue === 0} style={{ "--height": `${month.issuedValue / amountMax * 100}%` } as React.CSSProperties} aria-label={`${labels.format(month.date)}: ${formatRupiah(month.issuedValue)}`}>
-                <span className={styles.tooltip}>{formatRupiah(month.issuedValue)}</span>
-              </button>
-              <small>{labels.format(month.date)}</small>
-            </div>)}
-          </div>}
-        </article>
-
-        <article className={styles.module}>
-          <div className={styles.moduleHead}><h3>{en ? "Recent vouchers" : "Kupon Terbaru"}</h3><button type="button" onClick={onAll}>{en ? "View all" : "Lihat semua"} <ArrowUpRight size={14} /></button></div>
-          <ul className={styles.recent}>
-            {recent.map(voucher => <li key={voucher.id}><button type="button" onClick={() => onOpen(voucher)}>
-              <span className={styles.recentIcon}><Ticket size={16} /></span>
-              <span><code>{voucher.short_code}</code><small>{voucher.beneficiary_name}</small><time dateTime={voucher.issued_at}>{new Date(voucher.issued_at).toLocaleDateString(en ? "en" : "id", { day: "numeric", month: "short" })}</time></span>
-              <span><strong>{formatRupiah(voucher.nominal_idr)}</strong><small className={styles.status} data-state={voucher.status}>{formatStatusLabel(voucher.status, en ? "en" : "id")}</small></span>
-            </button></li>)}
-          </ul>
-          {!recent.length && <p className={styles.empty}>{empty}</p>}
-        </article>
-      </div>
-
-      <article className={styles.module}>
-        <div className={styles.activityHead}>
-          <div>
-            <h3>{en ? "Distribution & Spending Activity" : "Analisis Aktivitas Penyaluran & Belanja"}</h3>
-            <p className={styles.muted}>{en ? "Track aid distribution, voucher redemption, and partner store spending." : "Pantau distribusi bantuan, penggunaan kupon, dan aktivitas belanja di kedai mitra."}</p>
-          </div>
-          <div className={styles.activityControls}>
-            <select aria-label={en ? "Period" : "Periode"} value={period} onChange={event => setPeriod(Number(event.target.value))}>
+        <article className={`${styles.card} ${styles.monthly}`}>
+          <div className={styles.cardHead}>
+            <div><h3>{en ? "Monthly Aid Distribution" : "Distribusi Bantuan per Bulan"}</h3><p>{en ? "Issued voucher value (IDR)" : "Nilai kupon diterbitkan (Rp)"}</p></div>
+            <select aria-label={en ? "Monthly period" : "Periode bulanan"} value={period} onChange={event => { setPeriod(Number(event.target.value)); setActive(null); }}>
               {[3, 6, 12].map(value => <option key={value} value={value}>{value} {en ? "months" : "bulan"}</option>)}
             </select>
-            <button type="button" onClick={onReports}>{en ? "Reports" : "Laporan"} <ArrowUpRight size={15} /></button>
           </div>
-        </div>
-        {!months.length ? <p className={styles.empty}>{empty}</p> : <div className={styles.detail}>
-          <div>
-            <h4>{en ? "Vouchers (count)" : "Kupon (jumlah)"}</h4>
-            <p className={styles.muted}><i className={styles.key} />{en ? "Issued" : "Diterbitkan"} <i className={styles.keyRed} />{en ? "Redeemed" : "Ditukar"}</p>
-            <div className={styles.bars}>{months.map(month => (
-              <div key={month.key} className={styles.barColumn}>
-                <button type="button" className={styles.pair} aria-label={`${labels.format(month.date)}: ${month.issued} / ${month.redeemed}`}><span style={{ height: `${month.issued / countMax * 100}%` }} /><span style={{ height: `${month.redeemed / countMax * 100}%` }} /><span className={styles.tooltip}>{month.issued} / {month.redeemed}</span></button>
-                <small>{period < 12 ? labels.format(month.date) : month.date.getUTCMonth() + 1}</small>
+          {!months.some(month => month.issued > 0) ? <p className={styles.empty}>{empty}</p> : (
+            <div className={styles.barChart}>
+              <span className={styles.barMax}>{formatRupiah(amountMax)}</span>
+              <div className={styles.barGrid}>
+                {months.map((month, index) => <div key={month.key} className={styles.barColumn}>
+                  <button type="button" aria-label={`${monthFormatter.format(month.date)}: ${formatRupiah(month.value)}`}>
+                    <i data-empty={!month.value} style={{ height: `${100 * month.value / amountMax}%`, "--bar-delay": `${index * 24}ms` } as CSSProperties} />
+                    <span className={styles.tooltip}>{formatRupiah(month.value)}</span>
+                  </button>
+                  <small>{period <= 6 ? monthFormatter.format(month.date) : month.date.getUTCMonth() + 1}</small>
+                </div>)}
               </div>
-            ))}</div>
-          </div>
-          <div>
-            <h4>{en ? "Partner store spending (IDR)" : "Belanja kedai mitra (Rupiah)"}</h4>
-            <p className={styles.muted}>{months.reduce((sum, month) => sum + month.synced, 0)} {en ? "offline transactions synced" : "transaksi offline tersinkron"}</p>
-            <div className={styles.line}>
-              <svg viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true">
-                <polyline fill="none" stroke="#f04438" strokeWidth="2.5" vectorEffect="non-scaling-stroke" points={months.map((month, index) => `${10 + 280 * index / Math.max(1, months.length - 1)},${92 - 79 * month.spending / spendMax}`).join(" ")} />
-              </svg>
-              <div>{months.map(month => <button type="button" key={month.key} aria-label={`${labels.format(month.date)}: ${formatRupiah(month.spending)}`}><span className={styles.tooltip}>{formatRupiah(month.spending)}</span><small>{period < 12 ? labels.format(month.date) : month.date.getUTCMonth() + 1}</small></button>)}</div>
             </div>
+          )}
+        </article>
+
+        <article className={`${styles.card} ${styles.spending}`}>
+          <span className={styles.icon}><Store size={19} aria-hidden="true" /></span>
+          <div><h3>{en ? "Partner Store Spending" : "Belanja di Kedai Mitra"}</h3><strong>{formatRupiah(turnover)}</strong>
+            <p>{merchantCount} {en ? "stores" : "kedai"} <span aria-hidden="true">·</span> {offlineSynced} {en ? "offline transactions synced" : "transaksi offline tersinkron"}</p>
+            {topStores.length > 0 && <ul className={styles.storeChart} aria-label={en ? "Top stores by recorded spending" : "Kedai dengan belanja tercatat terbesar"}>{topStores.map(([id, store]) => <li key={id}><span>{store.name}</span><strong>{formatRupiah(store.value)}</strong><i style={{ width: (100 * store.value / Math.max(1, topStores[0][1].value)) + "%" }} /></li>)}</ul>}
           </div>
-        </div>}
-      </article>
+        </article>
+
+        <article className={`${styles.card} ${styles.feature}`}>
+          <div className={styles.cardHead}>
+            <div><h3>{en ? "Distribution Activity" : "Aktivitas Penyaluran"}</h3><p>{timeline.daily ? (en ? "Daily · Last 7 recorded days" : "Harian · 7 hari terakhir pada data") : (en ? "Monthly · Voucher counts" : "Bulanan · Jumlah kupon")}</p></div>
+            <button type="button" onClick={onReports}>{en ? "Reports" : "Laporan"} <ArrowUpRight size={14} /></button>
+          </div>
+          <div className={styles.trackTotals}>
+            <div><strong>{issued}</strong><span><i />{en ? "Issued" : "Diterbitkan"}</span></div>
+            <div><strong>{redeemed}</strong><span><i />{en ? "Redeemed" : "Ditukar"}</span></div>
+          </div>
+          {!issued && !redeemed ? <p className={styles.empty}>{empty}</p> : <>
+            <div className={styles.featureChart}>
+              <div className={styles.axis} aria-hidden="true">{countTicks.map(value =>
+                <span key={value} style={{ top: `${100 * y(value) / 140}%` }}>{value}</span>
+              )}</div>
+              <svg viewBox="0 0 300 140" preserveAspectRatio="none" aria-hidden="true">
+                <defs><linearGradient id={gradient} x2="0%" y2="100%"><stop stopColor="#a9d9f7" stopOpacity=".25" /><stop offset="100%" stopColor="#a9d9f7" stopOpacity="0" /></linearGradient></defs>
+                {countTicks.map(value => <path key={value} d={`M0 ${y(value)}H300`} stroke="#d8efff30" vectorEffect="non-scaling-stroke" />)}
+                <polygon points={`12,124 ${points("issued")} 288,124`} fill={`url(#${gradient})`} className={styles.area} />
+                <polyline className={styles.trace} fill="none" stroke="#a9d9f7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" points={points("issued")} />
+                <polyline className={styles.trace} fill="none" stroke="#f04438" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" points={points("redeemed")} />
+                {timeline.rows.map((row, index) => active === index && <g key={row.key}><path d={`M${x(index)} 16V124`} stroke="#d8efff60" strokeDasharray="3 3" /><circle cx={x(index)} cy={y(row.issued)} r="4" fill="#a9d9f7" /><circle cx={x(index)} cy={y(row.redeemed)} r="4" fill="#f86d63" /></g>)}
+              </svg>
+              <div className={styles.points}>{timeline.rows.map((row, index) => (
+                <button type="button" key={row.key} aria-label={`${dateFormatter.format(row.date)} · ${en ? "Issued" : "Diterbitkan"} ${row.issued} · ${en ? "Redeemed" : "Ditukar"} ${row.redeemed}`}
+                  onPointerEnter={() => setActive(index)} onPointerLeave={event => { if (document.activeElement !== event.currentTarget) setActive(null); }} onFocus={() => setActive(index)} onBlur={() => setActive(null)} onClick={() => setActive(index)}>
+                  <small>{timeline.rows.length > 7 ? row.date.getUTCMonth() + 1 : dateFormatter.format(row.date)}</small>
+                </button>
+              ))}</div>
+            </div>
+            <p className={styles.readout}>{active !== null && timeline.rows[active]
+              ? `${dateFormatter.format(timeline.rows[active].date)} · ${en ? "Issued" : "Terbit"} ${timeline.rows[active].issued} · ${en ? "Redeemed" : "Ditukar"} ${timeline.rows[active].redeemed}`
+              : en ? "Explore the chart by date." : "Pilih tanggal untuk melihat jumlah kupon."}</p>
+          </>}
+        </article>
+      </div>
     </section>
   );
 }
