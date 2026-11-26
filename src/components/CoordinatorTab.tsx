@@ -17,13 +17,46 @@ import {
   Beneficiary,
   CommodityItem,
   Merchant,
+  LedgerEntry,
   Voucher,
   VoucherStatus,
 } from "@/lib/types";
 import { AppLang } from "@/lib/i18n";
 import { formatRupiah, formatStatusLabel } from "@/lib/formatters";
 
+import CoordinatorAnalytics from "./CoordinatorAnalytics";
+import styles from "./CoordinatorWorkspace.module.css";
+
+function MetricValue({ value, currency = false }: { value: number; currency?: boolean }) {
+  const current = React.useRef(value);
+  const [display, setDisplay] = React.useState(value);
+
+  React.useEffect(() => {
+    const start = current.current;
+    if (start === value) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      current.current = value;
+      setDisplay(value);
+      return;
+    }
+    let frame = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      const time = Math.min((now - started) / 480, 1);
+      current.current = Math.round(start + (value - start) * (1 - (1 - time) ** 3));
+      setDisplay(current.current);
+      if (time < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return currency ? formatRupiah(display) : display;
+}
+
 interface CoordinatorTabProps {
+  ledger: LedgerEntry[];
+  onReports: () => void;
   lang: AppLang;
   currentUser: AuthUser;
   isOfflineMode: boolean;
@@ -85,6 +118,8 @@ interface CoordinatorTabProps {
 }
 
 export default function CoordinatorTab({
+  ledger,
+  onReports,
   lang,
   currentUser,
   isOfflineMode,
@@ -141,6 +176,7 @@ export default function CoordinatorTab({
   onNotifySelectedBeneficiary,
 }: CoordinatorTabProps) {
   const en = lang === "en";
+  const issueDrawer = React.useRef<HTMLDialogElement>(null);
   const [showTopupForm, setShowTopupForm] = React.useState(false);
   const [topupAmount, setTopupAmount] = React.useState("2000000");
   const [showAddPkgForm, setShowAddPkgForm] = React.useState(false);
@@ -172,39 +208,22 @@ export default function CoordinatorTab({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+    <div className={styles.workspace} id="coordinator-home">
+      <header className={styles.heading}>
         <div>
-          <p className="text-xs font-semibold text-emeraldTech">
-            {currentUser.name} · {currentUser.role_label}
-          </p>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-ink-primary mt-0.5">
-            {en ? "Aid Distribution Overview" : "Ringkasan Penyaluran Bansos"}
-          </h1>
-          <p className="text-sm text-ink-secondary mt-0.5">
-            {en
-              ? `Monitor available funds, manage ${beneficiaries.length} registered beneficiaries, and issue signed vouchers.`
-              : `Lihat sisa dana, daftar ${beneficiaries.length} warga penerima, dan buat kupon sembako.`}
-          </p>
+          <p>{currentUser.name} · {currentUser.role_label}</p>
+          <h1><span>{en ? <>Organizer <em>Dashboard.</em></> : <>Dashboard <em>Pengurus.</em></>}</span></h1>
+          <p>{en ? "Manage social aid distribution and digital vouchers." : "Kelola penyaluran bantuan sosial dan voucher digital untuk warga."}</p>
         </div>
-        <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-card border border-line/70 shadow-sm text-xs font-semibold text-ink-primary self-start md:self-auto">
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isOfflineMode ? "bg-amberTech" : "bg-emeraldTech animate-pulse"
-            }`}
-          />
-          {isOfflineMode
-            ? en
-              ? "Offline · Buffered Locally"
-              : "Offline · Tersimpan di Perangkat"
-            : en
-              ? "Online · Connected"
-              : "Online · Terhubung"}
-        </span>
-      </div>
+        <div className={styles.headingActions}>
+          <span className="text-xs font-bold">{isOfflineMode ? (en ? "Offline simulation" : "Simulasi offline") : (en ? "Online mode" : "Mode online")}</span>
+          <button id="coordinator-issue-trigger" type="button" onClick={() => issueDrawer.current?.showModal()}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
+          <button type="button" onClick={() => { setShowTopupForm(true); document.getElementById("coordinator-metrics")?.scrollIntoView({ block: "nearest" }); }}><Wallet size={16} />{en ? "Add funds" : "Tambah Dana"}</button>
+        </div>
+      </header>
 
       {/* 4 Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={styles.metrics} id="coordinator-metrics">
         <div className="bg-card rounded-2xl border border-line/70 shadow-sm p-5 flex flex-col justify-between gap-2.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-ink-secondary">
@@ -216,7 +235,7 @@ export default function CoordinatorTab({
           </div>
           <div>
             <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              {formatRupiah(poolTotalIdr)}
+              <MetricValue value={poolTotalIdr} currency />
             </p>
             <div className="flex items-center justify-between gap-2 mt-1">
               <p className="text-xs text-ink-muted">
@@ -241,7 +260,7 @@ export default function CoordinatorTab({
                 <input
                   type="number"
                   min={10000}
-                  step={50000}
+                  step={10000}
                   value={topupAmount}
                   onChange={(e) => setTopupAmount(e.target.value)}
                   className="w-full h-9 px-2.5 rounded-lg bg-surface border border-line text-xs font-mono text-ink-primary outline-none"
@@ -269,7 +288,7 @@ export default function CoordinatorTab({
           </div>
           <div>
             <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              {activeVouchersCount}
+              <MetricValue value={activeVouchersCount} />
             </p>
             <p className="text-xs text-ink-muted mt-1 tabular-nums">
               {en
@@ -290,7 +309,7 @@ export default function CoordinatorTab({
           </div>
           <div>
             <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              {formatRupiah(totalWarungTurnover)}
+              <MetricValue value={totalWarungTurnover} currency />
             </p>
             <p className="text-xs text-ink-muted mt-1 tabular-nums">
               {en
@@ -311,7 +330,7 @@ export default function CoordinatorTab({
           </div>
           <div>
             <p className="font-mono text-2xl font-bold tracking-[-0.02em] tabular-nums text-ink-primary">
-              {beneficiaries.length} {en ? "Households" : "Orang"}
+              <MetricValue value={beneficiaries.length} /> {en ? "Households" : "Orang"}
             </p>
             <p
               className={`text-xs mt-1 flex items-center gap-1.5 font-medium tabular-nums ${
@@ -331,10 +350,15 @@ export default function CoordinatorTab({
         </div>
       </div>
 
-      {/* 2-Column Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <CoordinatorAnalytics vouchers={vouchers} ledger={ledger} en={en} onOpen={onOpenVoucherCard} onReports={onReports} onAll={() => {
+        setCoordinatorRightView("VOUCHERS");
+        document.getElementById("coordinator-operations")?.scrollIntoView({ block: "start" });
+      }} />
+
+      {/* Voucher operations */}
+      <div className={`${styles.operations} grid grid-cols-1 xl:grid-cols-12 gap-5 items-start`} id="coordinator-operations">
         {/* LEFT: Issue Voucher */}
-        <div className="lg:col-span-5 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
+        <div className="xl:col-span-4 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
           <div className="p-5 border-b border-line/50 flex items-center justify-between gap-2 bg-surface/60">
             <div>
               <h2 className="text-base font-bold text-ink-primary">
@@ -490,7 +514,15 @@ export default function CoordinatorTab({
               </form>
             )}
 
-            <form onSubmit={onIssueVoucher} className="space-y-4">
+            <button type="button" onClick={() => issueDrawer.current?.showModal()} className="w-full h-11 rounded-xl bg-cta-bg text-cta-ink text-sm font-bold">
+              {en ? "Open voucher form" : "Buka formulir kupon"}
+            </button>
+            <dialog ref={issueDrawer} className={styles.dialog} aria-labelledby="coordinator-drawer-title">
+              <header className={styles.dialogHead}>
+                <h2 id="coordinator-drawer-title">{en ? "Issue food voucher" : "Buat Kupon Sembako"}</h2>
+                <button type="button" onClick={() => issueDrawer.current?.close()} aria-label={en ? "Close" : "Tutup"}>×</button>
+              </header>
+              <form onSubmit={(event) => { onIssueVoucher(event); issueDrawer.current?.close(); }} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-ink-primary">
                   {en
@@ -655,12 +687,13 @@ export default function CoordinatorTab({
                     : "Kupon diberi kode unik agar tidak bisa dipalsukan dan bisa dicek saat kedai offline."}
                 </span>
               </p>
-            </form>
+              </form>
+            </dialog>
           </div>
         </div>
 
         {/* RIGHT: Vouchers & Beneficiaries Registry */}
-        <div className="lg:col-span-7 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
+        <div className="xl:col-span-8 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
           <div className="p-4 border-b border-line/50 bg-surface/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="inline-flex bg-nested p-1 rounded-xl border border-line/50 self-start">
               <button
@@ -952,6 +985,16 @@ export default function CoordinatorTab({
           )}
         </div>
       </div>
+      <section className={styles.module} id="coordinator-merchants">
+        <div className={styles.moduleHead}>
+          <h2>{en ? "Partner stores" : "Kedai Mitra"}</h2>
+          <button type="button" onClick={() => { setShowAddResidentForm(false); setShowAddMerchantForm(true); document.getElementById("coordinator-operations")?.scrollIntoView({ block: "start" }); }}><Store size={15} /> {en ? "Add store" : "Tambah Kedai"}</button>
+        </div>
+        {merchants.length ? <div className="overflow-x-auto mt-3"><table className="w-full text-left text-sm">
+          <thead><tr><th scope="col" className="p-3">{en ? "Store ID" : "ID Kedai"}</th><th scope="col" className="p-3">{en ? "Store name" : "Nama Kedai"}</th></tr></thead>
+          <tbody>{merchants.map(merchant => <tr key={merchant.id} className="border-b border-line"><td className="p-3"><code>{merchant.id}</code></td><td className="p-3">{merchant.name}</td></tr>)}</tbody>
+        </table></div> : <p className={styles.empty}>{en ? "No stores registered." : "Belum ada kedai terdaftar."}</p>}
+      </section>
     </div>
   );
 }

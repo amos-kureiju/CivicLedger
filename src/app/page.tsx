@@ -67,6 +67,9 @@ import {
 import AuthGate from "@/components/AuthGate";
 import BrandLogo from "@/components/BrandLogo";
 import CoordinatorTab from "@/components/CoordinatorTab";
+import CoordinatorSearch from "@/components/CoordinatorSearch";
+import workspace from "@/components/CoordinatorWorkspace.module.css";
+import { Menu, PanelLeftClose, PanelLeftOpen, Plus, Users, X as CloseMenu } from "lucide-react";
 import BeneficiaryTab from "@/components/BeneficiaryTab";
 import MerchantPosTab from "@/components/MerchantPosTab";
 import ClearinghouseTab from "@/components/ClearinghouseTab";
@@ -111,6 +114,20 @@ export default function CivicLedgerApp() {
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [lang, setLang] = useState<AppLang>("id");
+  const [compactRail, setCompactRail] = useState(false);
+  const [deviceOnline, setDeviceOnline] = useState(true);
+  useEffect(() => {
+    const update = () => setDeviceOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  const [menuSearch, setMenuSearch] = useState("");
+  const mobileNavigation = useRef<HTMLDialogElement>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("COORDINATOR");
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [largeText, setLargeText] = useState<boolean>(false);
@@ -1648,13 +1665,41 @@ export default function CivicLedgerApp() {
     );
   }
 
-  const opsNav = navItems.filter((i) => i.section === "OPERATIONS");
-  const clearNav = navItems.filter((i) => i.section === "CLEARINGHOUSE");
+  const organizer = currentUser.role === "COORDINATOR";
+  const menuQuery = organizer ? menuSearch.trim().toLowerCase() : "";
+  const visibleNav = navItems.filter((item) => item.label.toLowerCase().includes(menuQuery));
+  const opsNav = visibleNav.filter((i) => i.section === "OPERATIONS");
+  const clearNav = visibleNav.filter((i) => i.section === "CLEARINGHOUSE");
+  const openPassword = () => {
+    setCpError("");
+    setShowChangePasswordModal(true);
+  };
+  function gotoCoordinator(id: string, view?: "VOUCHERS" | "BENEFICIARIES", open = false) {
+    setActiveTab("COORDINATOR");
+    if (view) setCoordinatorRightView(view);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const target = document.getElementById(id);
+      if (open) target?.click();
+      else target?.scrollIntoView({ block: "start" });
+    }));
+  }
+  const shortcuts = [
+    { label: lang === "en" ? "Analytics" : "Analitik", id: "coordinator-analytics", icon: BarChart3 },
+    { label: lang === "en" ? "Manage vouchers" : "Kelola Kupon", id: "coordinator-operations", view: "VOUCHERS" as const, icon: QrCode },
+    { label: lang === "en" ? "Resident records" : "Data Warga", id: "coordinator-operations", view: "BENEFICIARIES" as const, icon: Users },
+    { label: lang === "en" ? "Partner stores" : "Kedai Mitra", id: "coordinator-merchants", icon: Landmark },
+  ].filter((item) => item.label.toLowerCase().includes(menuQuery));
+  function openVoucher(voucher: Voucher) {
+    setWalletBeneficiaryId(voucher.beneficiary_id);
+    setSelectedVoucherForQR(voucher);
+    setActiveTab("BENEFICIARY");
+  }
 
   return (
     <div
       suppressHydrationWarning
-      className="min-h-screen flex bg-canvas text-ink-body"
+      className={`min-h-screen flex bg-canvas text-ink-body ${organizer ? workspace.shell : ""}`}
+      data-compact={organizer && compactRail}
     >
       {/* ==================== SIDEBAR KIRI (DESKTOP) ==================== */}
       <aside className="no-print hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-surface border-r border-line/70 z-30 select-none">
@@ -1672,14 +1717,14 @@ export default function CivicLedgerApp() {
                     : "Portal Pemilik Toko"
                   : currentUser.role === "BENEFICIARY"
                     ? (lang === "en" ? "Aid Recipient Portal" : "Portal Warga Penerima")
-                    : t.portalSub}
+                    : organizer ? (lang === "en" ? "Community Aid & Digital Vouchers" : "Bantuan Warga & Voucher Digital") : t.portalSub}
               </span>
             </div>
           </div>
         </div>
 
         {/* Profil Akun */}
-        <div className="p-3.5 border-b border-line/50 bg-nested/45">
+        {!organizer && <div className="p-3.5 border-b border-line/50 bg-nested/45">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-cta-bg text-cta-ink flex items-center justify-center font-bold text-sm shrink-0">
               {currentUser.name.charAt(0).toUpperCase()}
@@ -1714,10 +1759,17 @@ export default function CivicLedgerApp() {
               Keluar
             </button>
           </div>
-        </div>
+        </div>}
 
+        {organizer && <div className={workspace.railTools}>
+          <input type="search" placeholder={lang === "en" ? "Find menu…" : "Cari menu…"} aria-label={lang === "en" ? "Find menu" : "Cari menu"} value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} />
+          <button type="button" aria-label={compactRail ? "Perluas menu" : "Ringkas menu"} aria-expanded={!compactRail} onClick={() => { setMenuSearch(""); setCompactRail(!compactRail); }}>{compactRail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
+          <div className={workspace.railIcons}>{navItems.map(({ id, label, icon: Icon }) => <button type="button" key={id} aria-label={label} title={label} aria-current={id === activeTab ? "page" : undefined} onClick={() => setActiveTab(id)}><Icon className="w-[18px] h-[18px]" /></button>)}</div>
+        </div>}
         {/* Navigasi */}
         <nav className="flex-1 py-4 space-y-5 overflow-y-auto px-2.5">
+          {organizer && shortcuts.length > 0 && <div className={workspace.shortcuts}>{shortcuts.map(({ label, id, view, icon: Icon }) => <a key={label} href={"#" + id} onClick={(event) => { event.preventDefault(); gotoCoordinator(id, view); }}><Icon size={14} className="inline mr-2" />{label}</a>)}</div>}
+          {organizer && !visibleNav.length && !shortcuts.length && <p className="text-xs px-2">{lang === "en" ? "No matching menu." : "Menu tidak ditemukan."}</p>}
           {opsNav.length > 0 && (
             <div>
               <p className="px-2.5 mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
@@ -1731,6 +1783,7 @@ export default function CivicLedgerApp() {
                     <button
                       key={item.id}
                       onClick={() => setActiveTab(item.id)}
+                      aria-current={active ? "page" : undefined}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13.5px] transition ${active
                           ? "bg-cta-bg text-cta-ink font-semibold shadow-sm"
                           : "text-ink-body hover:text-ink-primary hover:bg-nested"
@@ -1775,6 +1828,7 @@ export default function CivicLedgerApp() {
                     <button
                       key={item.id}
                       onClick={() => setActiveTab(item.id)}
+                      aria-current={active ? "page" : undefined}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13.5px] transition ${active
                           ? "bg-cta-bg text-cta-ink font-semibold shadow-sm"
                           : "text-ink-body hover:text-ink-primary hover:bg-nested"
@@ -1799,7 +1853,7 @@ export default function CivicLedgerApp() {
         <div className="p-3.5 border-t border-line/60 bg-surface space-y-2.5">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 text-xs text-ink-secondary">
-              <span className="font-medium">Sinyal</span>
+              <span className="font-medium">{organizer ? (lang === "en" ? "Simulation" : "Simulasi") : "Sinyal"}</span>
               <div className="flex bg-nested p-0.5 rounded-lg border border-line/60">
                 <button
                   type="button"
@@ -1930,6 +1984,7 @@ export default function CivicLedgerApp() {
           </div>
 
           <div className="border-t border-line/40 pt-2 space-y-1 text-[11px] text-ink-muted">
+            {organizer && <div className="flex justify-between gap-2"><span>{lang === "en" ? "Device connection" : "Koneksi perangkat"}</span><strong>{deviceOnline ? "Online" : "Offline"}</strong></div>}
             <div
               className="flex items-center justify-between gap-2"
               title={`Backend: ${backendEngine}`}
@@ -1985,9 +2040,12 @@ export default function CivicLedgerApp() {
       </aside>
 
       {/* ==================== AREA KONTEN UTAMA ==================== */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+      <div className={`flex-1 lg:pl-64 flex flex-col min-w-0 ${organizer ? workspace.body : ""}`}>
         <header className="no-print sticky top-0 z-20 h-16 bg-surface/92 backdrop-blur-md border-b border-line/60 px-4 sm:px-6 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex items-center gap-3">
+          {organizer ? <>
+            <button className={workspace.mobileMenu} type="button" aria-label={lang === "en" ? "Open navigation" : "Buka navigasi"} onClick={() => mobileNavigation.current?.showModal()}><Menu size={20} /></button>
+            <CoordinatorSearch en={lang === "en"} vouchers={vouchers} beneficiaries={beneficiaries} ledger={ledger} onVoucher={openVoucher} onResident={(resident) => { setBeneficiarySearch(resident.name); gotoCoordinator("coordinator-operations", "BENEFICIARIES"); }} onTransaction={() => setActiveTab("CLEARINGHOUSE")} />
+          </> : <div className="min-w-0 flex items-center gap-3">
             <BrandLogo size={34} className="lg:hidden shrink-0 rounded-xl shadow-sm" />
             <div className="truncate">
               <div className="text-[15px] font-bold tracking-[-0.015em] text-ink-primary truncate">
@@ -1997,7 +2055,7 @@ export default function CivicLedgerApp() {
                 {t.tabs[activeTab].subtitle}
               </div>
             </div>
-          </div>
+          </div>}
 
           <div className="flex items-center gap-2 shrink-0">
             {currentUser.role !== "BENEFICIARY" && offlineQueue.length > 0 && (
@@ -2052,6 +2110,7 @@ export default function CivicLedgerApp() {
               {isOfflineMode ? "Offline" : "Online"}
             </button>
 
+            {organizer && <button type="button" className={workspace.quick} aria-label={lang === "en" ? "Issue voucher" : "Buat Kupon"} onClick={() => gotoCoordinator("coordinator-issue-trigger", undefined, true)}><Plus size={15} /> <span>{lang === "en" ? "Issue" : "Buat Kupon"}</span></button>}
             <span
               title="Seluruh data di website ini adalah data contoh simulasi untuk STACK 2026."
               className="hidden md:inline-flex items-center px-3 py-1.5 rounded-full bg-nested border border-line/60 text-[11px] font-semibold text-ink-secondary"
@@ -2080,17 +2139,35 @@ export default function CivicLedgerApp() {
             >
               <LogOut className="w-4 h-4" />
             </button>
+            {organizer && <details className={workspace.profile}>
+              <summary aria-label={lang === "en" ? "Account and settings" : "Akun dan pengaturan"}><span className={workspace.avatar}>{currentUser.name.charAt(0)}</span><strong>{currentUser.role_label}</strong></summary>
+              <div onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
+                <strong>{currentUser.name}</strong>
+                <button type="button" onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? t.dayMode : t.nightMode}</button>
+                <button type="button" onClick={() => updateLargeText(!largeText)}>{largeText ? t.largeTextOn : t.largeTextOff}</button>
+                <button type="button" onClick={() => setIsOfflineMode(!isOfflineMode)}>{isOfflineMode ? (lang === "en" ? "Stop offline simulation" : "Akhiri simulasi offline") : (lang === "en" ? "Simulate offline" : "Simulasi offline")}</button>
+                <button type="button" onClick={openPassword}>{lang === "en" ? "Change password" : "Ganti kata sandi"}</button>
+                <button type="button" onClick={handleResetDemo}>{lang === "en" ? "Reset demo data" : "Reset data demo"}</button>
+                <button type="button" onClick={handleLogout}>{lang === "en" ? "Sign out" : "Keluar"}</button>
+              </div>
+            </details>}
           </div>
         </header>
+        {organizer && <dialog ref={mobileNavigation} className={workspace.dialog} aria-labelledby="rail-title">
+          <header className={workspace.dialogHead}><h2 id="rail-title">CivicLedger</h2><button type="button" onClick={() => mobileNavigation.current?.close()} aria-label={lang === "en" ? "Close" : "Tutup"}><CloseMenu size={18} /></button></header>
+          <nav className={workspace.mobileLinks}>{navItems.map(({ id, label }) => <button key={id} type="button" aria-current={id === activeTab ? "page" : undefined} onClick={() => { setActiveTab(id); mobileNavigation.current?.close(); }}>{label}</button>)}
+          {shortcuts.map(({ label, id, view }) => <button key={label} type="button" onClick={() => { mobileNavigation.current?.close(); gotoCoordinator(id, view); }}>{label}</button>)}</nav>
+        </dialog>}
 
         {/* Tab Mobile */}
-        <div className="no-print lg:hidden border-b border-line/60 bg-surface px-4 py-2.5 flex items-center gap-1.5 overflow-x-auto">
+        <div className={organizer ? "hidden" : "no-print lg:hidden border-b border-line/60 bg-surface px-4 py-2.5 flex items-center gap-1.5 overflow-x-auto"}>
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
+                      aria-current={active ? "page" : undefined}
                 className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${active
                     ? "bg-cta-bg text-cta-ink shadow-sm"
                     : "text-ink-body hover:text-ink-primary bg-card border border-line/60"
@@ -2161,7 +2238,9 @@ export default function CivicLedgerApp() {
         {/* ==================== KONTEN HALAMAN ==================== */}
         <main className="flex-1 px-4 sm:px-6 py-6">
           <div className="max-w-[1440px] mx-auto">
-            {loading ? (
+            {loading && organizer ? (
+              <div className={workspace.skeleton} role="status" aria-label={lang === "en" ? "Loading dashboard" : "Memuat dashboard"}><span /><span /><span /><span /><span /></div>
+            ) : loading ? (
               <div className="py-20 text-center text-sm text-ink-muted">
                 Memuat data bansos...
               </div>
@@ -2170,6 +2249,8 @@ export default function CivicLedgerApp() {
                 {/* TAB 1: BERANDA PENGURUS */}
                 {activeTab === "COORDINATOR" && (
                   <CoordinatorTab
+                    ledger={ledger}
+                    onReports={() => setActiveTab("REPORTS")}
                     lang={lang}
                     currentUser={currentUser}
                     isOfflineMode={isOfflineMode}
@@ -2222,11 +2303,7 @@ export default function CivicLedgerApp() {
                     onTopupPool={handleTopupPool}
                     onAddCommodity={handleAddCommodity}
                     onIssueVoucher={handleIssueVoucher}
-                    onOpenVoucherCard={(v) => {
-                      setWalletBeneficiaryId(v.beneficiary_id);
-                      setSelectedVoucherForQR(v);
-                      setActiveTab("BENEFICIARY");
-                    }}
+                    onOpenVoucherCard={openVoucher}
                     onNotifySelectedBeneficiary={(name) =>
                       showToast(
                         "info",
