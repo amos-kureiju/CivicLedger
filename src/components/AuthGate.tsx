@@ -24,6 +24,7 @@ import {
 import { AuthRole, AuthUser } from "@/lib/types";
 import { AppLang, UI_COPY } from "@/lib/i18n";
 import BrandLogo from "@/components/BrandLogo";
+import styles from "./AuthHeading.module.css";
 
 type AuthScreenMode = "LOGIN" | "RESET" | "REGISTER";
 type ThemeMode = "light" | "dark";
@@ -539,13 +540,15 @@ export default function AuthGate({
               {/* FORM MASUK */}
               {mode === "LOGIN" && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-ink-primary">
-                      Masuk ke Akun
+                  <div className={styles.intro}>
+                    <p className={styles.eyebrow}>{t.auth.loginEyebrow}</p>
+                    <h2 className={styles.title}>
+                      <span className={styles.reveal}>
+                        {t.auth.loginHeading}{" "}
+                        <span className={styles.brand}>CivicLedger.</span>
+                      </span>
                     </h2>
-                    <p className="text-xs text-ink-muted mt-0.5">
-                      Ketik email atau nomor HP yang sudah terdaftar.
-                    </p>
+                    <p className={styles.description}>{t.auth.loginSub}</p>
                   </div>
 
                   <div className="space-y-1.5">
