@@ -4,7 +4,6 @@ import React from "react";
 import {
   ChevronDown,
   Plus,
-  Search,
   ShieldCheck,
   Store,
   Ticket,
@@ -22,10 +21,12 @@ import {
   VoucherStatus,
 } from "@/lib/types";
 import { AppLang } from "@/lib/i18n";
-import { formatRupiah, formatStatusLabel } from "@/lib/formatters";
+import { formatRupiah } from "@/lib/formatters";
 
 import CoordinatorAnalytics from "./CoordinatorAnalytics";
 import styles from "./CoordinatorWorkspace.module.css";
+import CoordinatorResources, { type ResourceView } from "./CoordinatorResources";
+import resourceStyles from "./CoordinatorResources.module.css";
 
 function MetricValue({ value, currency = false }: { value: number; currency?: boolean }) {
   const current = React.useRef(value);
@@ -76,10 +77,6 @@ interface CoordinatorTabProps {
   setSelectedCommodityCode: (code: string) => void;
   validityHours: number;
   setValidityHours: (hours: number) => void;
-  showAddResidentForm: boolean;
-  setShowAddResidentForm: (v: boolean) => void;
-  showAddMerchantForm: boolean;
-  setShowAddMerchantForm: (v: boolean) => void;
   newResidentName: string;
   setNewResidentName: (v: string) => void;
   newResidentRtRw: string;
@@ -96,8 +93,11 @@ interface CoordinatorTabProps {
   setNewMerchantRtRw: (v: string) => void;
   newMerchantBank: string;
   setNewMerchantBank: (v: string) => void;
-  coordinatorRightView: "VOUCHERS" | "BENEFICIARIES";
-  setCoordinatorRightView: (v: "VOUCHERS" | "BENEFICIARIES") => void;
+  coordinatorRightView: ResourceView;
+  setCoordinatorRightView: (v: ResourceView) => void;
+  fullResources: boolean;
+  onFullResources: () => void;
+  onCopyVoucherSms: (voucher: Voucher) => void;
   voucherStatusFilter: "ALL" | VoucherStatus;
   setVoucherStatusFilter: (v: "ALL" | VoucherStatus) => void;
   voucherSearch: string;
@@ -139,10 +139,6 @@ export default function CoordinatorTab({
   setSelectedCommodityCode,
   validityHours,
   setValidityHours,
-  showAddResidentForm,
-  setShowAddResidentForm,
-  showAddMerchantForm,
-  setShowAddMerchantForm,
   newResidentName,
   setNewResidentName,
   newResidentRtRw,
@@ -161,6 +157,9 @@ export default function CoordinatorTab({
   setNewMerchantBank,
   coordinatorRightView,
   setCoordinatorRightView,
+  fullResources,
+  onFullResources,
+  onCopyVoucherSms,
   voucherStatusFilter,
   setVoucherStatusFilter,
   voucherSearch,
@@ -176,10 +175,13 @@ export default function CoordinatorTab({
   onNotifySelectedBeneficiary,
 }: CoordinatorTabProps) {
   const en = lang === "en";
-  const issueDrawer = React.useRef<HTMLDialogElement>(null);
-  const [showTopupForm, setShowTopupForm] = React.useState(false);
+  const creationDrawer = React.useRef<HTMLDialogElement>(null);
+  const [creation, setCreation] = React.useState<ResourceView | "FUNDS">("VOUCHERS");
+  function openCreation(view: ResourceView | "FUNDS") {
+    setCreation(view);
+    creationDrawer.current?.showModal();
+  }
   const [topupAmount, setTopupAmount] = React.useState("2000000");
-  const [showAddPkgForm, setShowAddPkgForm] = React.useState(false);
   const [pkgName, setPkgName] = React.useState("");
   const [pkgItems, setPkgItems] = React.useState("");
   const [pkgNominal, setPkgNominal] = React.useState("65000");
@@ -189,7 +191,7 @@ export default function CoordinatorTab({
     const val = Number(topupAmount.replace(/[^0-9]/g, ""));
     if (!val || val <= 0) return;
     await onTopupPool(val);
-    setShowTopupForm(false);
+    creationDrawer.current?.close();
   };
 
   const submitPkg = async (e: React.FormEvent) => {
@@ -204,7 +206,7 @@ export default function CoordinatorTab({
     setPkgName("");
     setPkgItems("");
     setPkgNominal("65000");
-    setShowAddPkgForm(false);
+    creationDrawer.current?.close();
   };
 
   return (
@@ -217,8 +219,8 @@ export default function CoordinatorTab({
         </div>
         <div className={styles.headingActions}>
           <span className="text-xs font-bold">{isOfflineMode ? (en ? "Offline simulation" : "Simulasi offline") : (en ? "Online mode" : "Mode online")}</span>
-          <button id="coordinator-issue-trigger" type="button" onClick={() => issueDrawer.current?.showModal()}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
-          <button type="button" onClick={() => { setShowTopupForm(true); document.getElementById("coordinator-metrics")?.scrollIntoView({ block: "nearest" }); }}><Wallet size={16} />{en ? "Add funds" : "Tambah Dana"}</button>
+          <button id="coordinator-issue-trigger" type="button" onClick={() => openCreation("VOUCHERS")}><Plus size={16} />{en ? "Issue voucher" : "Buat Kupon"}</button>
+          <button type="button" onClick={() => openCreation("FUNDS")}><Wallet size={16} />{en ? "Add funds" : "Tambah Dana"}</button>
         </div>
       </header>
 
@@ -241,39 +243,10 @@ export default function CoordinatorTab({
               <p className="text-xs text-ink-muted">
                 {en ? "Dynamic aid pool" : "Dana sembako dinamis"}
               </p>
-              <button
-                type="button"
-                onClick={() => setShowTopupForm(!showTopupForm)}
-                className="text-[11px] font-bold text-emeraldTech hover:underline"
-              >
-                {showTopupForm
-                  ? en
-                    ? "Close"
-                    : "Tutup"
-                  : en
-                    ? "+ Top Up"
-                    : "+ Tambah Dana"}
+              <button type="button" onClick={() => openCreation("FUNDS")} className="text-xs font-bold text-emeraldTech hover:underline">
+                {en ? "+ Top Up" : "+ Tambah Dana"}
               </button>
             </div>
-            {showTopupForm && (
-              <form onSubmit={submitTopup} className="mt-2.5 flex gap-1.5">
-                <input
-                  type="number"
-                  min={10000}
-                  step={10000}
-                  value={topupAmount}
-                  onChange={(e) => setTopupAmount(e.target.value)}
-                  className="w-full h-9 px-2.5 rounded-lg bg-surface border border-line text-xs font-mono text-ink-primary outline-none"
-                  placeholder="2000000"
-                />
-                <button
-                  type="submit"
-                  className="px-3 h-9 rounded-lg bg-cta-bg text-cta-ink text-xs font-bold shrink-0"
-                >
-                  {en ? "Add" : "Tambah"}
-                </button>
-              </form>
-            )}
           </div>
         </div>
 
@@ -351,178 +324,31 @@ export default function CoordinatorTab({
       </div>
 
       <CoordinatorAnalytics vouchers={vouchers} ledger={ledger} en={en} onOpen={onOpenVoucherCard} onReports={onReports} onAll={() => {
+        onFullResources();
         setCoordinatorRightView("VOUCHERS");
         document.getElementById("coordinator-operations")?.scrollIntoView({ block: "start" });
       }} />
 
-      {/* Voucher operations */}
-      <div className={`${styles.operations} grid grid-cols-1 xl:grid-cols-12 gap-5 items-start`} id="coordinator-operations">
-        {/* LEFT: Issue Voucher */}
-        <div className="xl:col-span-4 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
-          <div className="p-5 border-b border-line/50 flex items-center justify-between gap-2 bg-surface/60">
-            <div>
-              <h2 className="text-base font-bold text-ink-primary">
-                {en ? "Issue Food Voucher" : "Buat Kupon Sembako"}
-              </h2>
-              <p className="text-xs text-ink-muted mt-0.5">
-                {en
-                  ? "Select a beneficiary and commodity aid package"
-                  : "Pilih nama penerima dan paket sembakonya"}
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddResidentForm(!showAddResidentForm);
-                  setShowAddMerchantForm(false);
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-nested hover:bg-elevated border border-line/60 text-xs font-semibold text-ink-primary transition"
-              >
-                <UserPlus className="w-3.5 h-3.5 text-emeraldTech" />
-                {en ? "+ Resident" : "+ Warga"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddMerchantForm(!showAddMerchantForm);
-                  setShowAddResidentForm(false);
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-nested hover:bg-elevated border border-line/60 text-xs font-semibold text-ink-primary transition"
-              >
-                <Store className="w-3.5 h-3.5 text-amberTech" />
-                {en ? "+ Stall" : "+ Kedai"}
-              </button>
-            </div>
-          </div>
 
-          <div className="p-5 space-y-4">
-            {showAddResidentForm && (
-              <form
-                onSubmit={onAddBeneficiary}
-                className="p-4 rounded-xl bg-nested/60 border border-line/70 space-y-3"
-              >
-                <p className="text-sm font-bold text-ink-primary">
-                  {en ? "Register New Beneficiary" : "Tambah Penerima Baru"}
-                </p>
-                <input
-                  type="text"
-                  required
-                  placeholder={
-                    en ? "Full name" : "Nama lengkap (misal: Mangasi Simatupang)"
-                  }
-                  value={newResidentName}
-                  onChange={(e) => setNewResidentName(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={newResidentRtRw}
-                    onChange={(e) => setNewResidentRtRw(e.target.value)}
-                    placeholder={en ? "Village / District" : "Desa / Kecamatan"}
-                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                  />
-                  <input
-                    type="text"
-                    value={newResidentCategory}
-                    onChange={(e) => setNewResidentCategory(e.target.value)}
-                    placeholder={en ? "Category" : "Kategori"}
-                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={newResidentPhone}
-                  onChange={(e) => setNewResidentPhone(e.target.value)}
-                  placeholder={en ? "Phone number" : "Nomor HP"}
-                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                />
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddResidentForm(false)}
-                    className="px-3.5 py-2 rounded-lg text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                  >
-                    {en ? "Cancel" : "Batal"}
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold"
-                  >
-                    {en ? "Save" : "Simpan"}
-                  </button>
-                </div>
-              </form>
-            )}
+      <CoordinatorResources en={en} view={coordinatorRightView} onView={setCoordinatorRightView} preview={!fullResources} onFullView={onFullResources}
+        vouchers={vouchers} beneficiaries={beneficiaries} filteredVouchers={filteredVouchers} filteredBeneficiaries={filteredBeneficiaries} merchants={merchants} packages={catalog}
+        voucherQuery={voucherSearch} onVoucherQuery={setVoucherSearch} beneficiaryQuery={beneficiarySearch} onBeneficiaryQuery={setBeneficiarySearch} status={voucherStatusFilter} onStatus={setVoucherStatusFilter}
+        onAdd={openCreation} onPrint={onOpenVoucherCard} onSms={onCopyVoucherSms}
+        onResident={(resident) => { setSelectedBeneficiaryId(resident.id); onNotifySelectedBeneficiary(resident.name); openCreation("VOUCHERS"); }}
+      />
 
-            {showAddMerchantForm && (
-              <form
-                onSubmit={onAddMerchant}
-                className="p-4 rounded-xl bg-nested/60 border border-line/70 space-y-3"
-              >
-                <p className="text-sm font-bold text-ink-primary">
-                  {en ? "Register Local Stall" : "Tambah Kedai Mitra"}
-                </p>
-                <input
-                  type="text"
-                  required
-                  placeholder={en ? "Stall name" : "Nama kedai sembako"}
-                  value={newMerchantName}
-                  onChange={(e) => setNewMerchantName(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder={en ? "Owner name" : "Nama pemilik"}
-                    value={newMerchantOwner}
-                    onChange={(e) => setNewMerchantOwner(e.target.value)}
-                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
-                  />
-                  <input
-                    type="text"
-                    value={newMerchantRtRw}
-                    onChange={(e) => setNewMerchantRtRw(e.target.value)}
-                    placeholder={en ? "Address" : "Alamat kedai"}
-                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={newMerchantBank}
-                  onChange={(e) => setNewMerchantBank(e.target.value)}
-                  placeholder={en ? "Bank account / QRIS" : "Rekening / QRIS"}
-                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
-                />
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddMerchantForm(false)}
-                    className="px-3.5 py-2 rounded-lg text-xs font-semibold text-ink-muted hover:text-ink-primary"
-                  >
-                    {en ? "Cancel" : "Batal"}
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold"
-                  >
-                    {en ? "Save" : "Simpan"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            <button type="button" onClick={() => issueDrawer.current?.showModal()} className="w-full h-11 rounded-xl bg-cta-bg text-cta-ink text-sm font-bold">
-              {en ? "Open voucher form" : "Buka formulir kupon"}
-            </button>
-            <dialog ref={issueDrawer} className={styles.dialog} aria-labelledby="coordinator-drawer-title">
-              <header className={styles.dialogHead}>
-                <h2 id="coordinator-drawer-title">{en ? "Issue food voucher" : "Buat Kupon Sembako"}</h2>
-                <button type="button" onClick={() => issueDrawer.current?.close()} aria-label={en ? "Close" : "Tutup"}>×</button>
-              </header>
-              <form onSubmit={(event) => { onIssueVoucher(event); issueDrawer.current?.close(); }} className="space-y-4">
+      <dialog ref={creationDrawer} className={styles.dialog} aria-labelledby="coordinator-drawer-title">
+        <header className={styles.dialogHead}>
+          <h2 id="coordinator-drawer-title">{{
+            VOUCHERS: en ? "Issue food voucher" : "Buat Kupon Sembako",
+            BENEFICIARIES: en ? "Add recipient" : "Tambah Warga",
+            MERCHANTS: en ? "Add store" : "Tambah Kedai",
+            PACKAGES: en ? "Add food package" : "Tambah Paket Sembako",
+            FUNDS: en ? "Add funds" : "Tambah Dana",
+          }[creation]}</h2>
+          <button type="button" onClick={() => creationDrawer.current?.close()} aria-label={en ? "Close" : "Tutup"}>×</button>
+        </header>
+        {creation === "VOUCHERS" && (<form onSubmit={(event) => { onIssueVoucher(event); creationDrawer.current?.close(); }} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-ink-primary">
                   {en
@@ -550,65 +376,7 @@ export default function CoordinatorTab({
                   <label className="block text-xs font-bold text-ink-primary">
                     {en ? "2. Commodity Package" : "2. Paket Sembako"}
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddPkgForm(!showAddPkgForm)}
-                    className="text-[11px] font-bold text-emeraldTech hover:underline"
-                  >
-                    {showAddPkgForm
-                      ? en
-                        ? "Close"
-                        : "Tutup"
-                      : en
-                        ? "+ Custom Package"
-                        : "+ Tambah Paket"}
-                  </button>
                 </div>
-
-                {showAddPkgForm && (
-                  <div className="p-3.5 rounded-xl bg-nested/60 border border-line/70 space-y-2.5">
-                    <input
-                      type="text"
-                      placeholder={
-                        en
-                          ? "Package name (e.g. Baby Nutrition Pack)"
-                          : "Nama paket (misal: Paket Gizi Balita)"
-                      }
-                      value={pkgName}
-                      onChange={(e) => setPkgName(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg bg-card border border-line text-xs text-ink-primary outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder={
-                        en
-                          ? "Items included (e.g. Milk, eggs, oats)"
-                          : "Isi barang (misal: Susu, telur, biskuit)"
-                      }
-                      value={pkgItems}
-                      onChange={(e) => setPkgItems(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg bg-card border border-line text-xs text-ink-primary outline-none"
-                    />
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        min={5000}
-                        step={5000}
-                        value={pkgNominal}
-                        onChange={(e) => setPkgNominal(e.target.value)}
-                        placeholder="65000"
-                        className="flex-1 h-10 px-3 rounded-lg bg-card border border-line text-xs font-mono text-ink-primary outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={submitPkg}
-                        className="px-3.5 h-10 rounded-lg bg-cta-bg text-cta-ink text-xs font-bold"
-                      >
-                        {en ? "Save Package" : "Simpan Paket"}
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 <div className="space-y-2">
                   {catalog.map((item) => {
@@ -687,314 +455,142 @@ export default function CoordinatorTab({
                     : "Kupon diberi kode unik agar tidak bisa dipalsukan dan bisa dicek saat kedai offline."}
                 </span>
               </p>
-              </form>
-            </dialog>
-          </div>
-        </div>
-
-        {/* RIGHT: Vouchers & Beneficiaries Registry */}
-        <div className="xl:col-span-8 bg-card rounded-2xl border border-line/75 shadow-sm flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-line/50 bg-surface/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="inline-flex bg-nested p-1 rounded-xl border border-line/50 self-start">
-              <button
-                type="button"
-                onClick={() => setCoordinatorRightView("VOUCHERS")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                  coordinatorRightView === "VOUCHERS"
-                    ? "bg-card text-ink-primary shadow-sm"
-                    : "text-ink-muted hover:text-ink-primary"
-                }`}
+              </form>)}
+        {creation === "BENEFICIARIES" && (<form
+                onSubmit={(event) => { onAddBeneficiary(event); creationDrawer.current?.close(); }}
+                className="p-4 rounded-xl bg-nested/60 border border-line/70 space-y-3"
               >
-                {en
-                  ? `Vouchers (${vouchers.length})`
-                  : `Daftar Kupon (${vouchers.length})`}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCoordinatorRightView("BENEFICIARIES")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                  coordinatorRightView === "BENEFICIARIES"
-                    ? "bg-card text-ink-primary shadow-sm"
-                    : "text-ink-muted hover:text-ink-primary"
-                }`}
-              >
-                {en
-                  ? `Beneficiaries (${beneficiaries.length})`
-                  : `Daftar Penerima (${beneficiaries.length})`}
-              </button>
-            </div>
-
-            {coordinatorRightView === "VOUCHERS" && (
-              <div className="flex bg-nested p-1 rounded-xl border border-line/50 shrink-0 self-start sm:self-auto">
-                {(
-                  [
-                    { id: "ALL", label: en ? "All" : "Semua" },
-                    { id: "ACTIVE", label: en ? "Active" : "Siap Pakai" },
-                    { id: "REDEEMED", label: en ? "Redeemed" : "Dipakai" },
-                    { id: "SETTLED", label: en ? "Settled" : "Cair" },
-                  ] as const
-                ).map((st) => (
+                <p className="text-sm font-bold text-ink-primary">
+                  {en ? "Register New Beneficiary" : "Tambah Penerima Baru"}
+                </p>
+                <input
+                  type="text"
+                  required
+                  placeholder={
+                    en ? "Full name" : "Nama lengkap (misal: Mangasi Simatupang)"
+                  }
+                  value={newResidentName}
+                  onChange={(e) => setNewResidentName(e.target.value)}
+                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={newResidentRtRw}
+                    onChange={(e) => setNewResidentRtRw(e.target.value)}
+                    placeholder={en ? "Village / District" : "Desa / Kecamatan"}
+                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={newResidentCategory}
+                    onChange={(e) => setNewResidentCategory(e.target.value)}
+                    placeholder={en ? "Category" : "Kategori"}
+                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={newResidentPhone}
+                  onChange={(e) => setNewResidentPhone(e.target.value)}
+                  placeholder={en ? "Phone number" : "Nomor HP"}
+                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
+                />
+                <div className="flex justify-end gap-2 pt-1">
                   <button
-                    key={st.id}
                     type="button"
-                    onClick={() => setVoucherStatusFilter(st.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
-                      voucherStatusFilter === st.id
-                        ? "bg-card text-ink-primary shadow-sm"
-                        : "text-ink-muted hover:text-ink-primary"
-                    }`}
+                    onClick={() => creationDrawer.current?.close()}
+                    className="px-3.5 py-2 rounded-lg text-xs font-semibold text-ink-muted hover:text-ink-primary"
                   >
-                    {st.label}
+                    {en ? "Cancel" : "Batal"}
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {coordinatorRightView === "VOUCHERS" ? (
-            <>
-              <div className="p-3.5 bg-surface/40 border-b border-line/45">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold"
+                  >
+                    {en ? "Save" : "Simpan"}
+                  </button>
+                </div>
+              </form>)}
+        {creation === "MERCHANTS" && (<form
+                onSubmit={(event) => { onAddMerchant(event); creationDrawer.current?.close(); }}
+                className="p-4 rounded-xl bg-nested/60 border border-line/70 space-y-3"
+              >
+                <p className="text-sm font-bold text-ink-primary">
+                  {en ? "Register Local Stall" : "Tambah Kedai Mitra"}
+                </p>
+                <input
+                  type="text"
+                  required
+                  placeholder={en ? "Stall name" : "Nama kedai sembako"}
+                  value={newMerchantName}
+                  onChange={(e) => setNewMerchantName(e.target.value)}
+                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
+                />
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
-                    value={voucherSearch}
-                    onChange={(e) => setVoucherSearch(e.target.value)}
-                    placeholder={
-                      en
-                        ? "Search voucher code, resident, or package..."
-                        : "Cari kode kupon, nama warga, atau paket..."
-                    }
-                    className="w-full h-10 pl-10 pr-3.5 rounded-xl bg-card border border-line/70 focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
+                    required
+                    placeholder={en ? "Owner name" : "Nama pemilik"}
+                    value={newMerchantOwner}
+                    onChange={(e) => setNewMerchantOwner(e.target.value)}
+                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
                   />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-nested/60 border-b border-line/50 text-xs font-semibold text-ink-secondary">
-                      <th className="py-3 px-4">
-                        {en ? "Code" : "Kode Kupon"}
-                      </th>
-                      <th className="py-3 px-3">
-                        {en ? "Beneficiary" : "Penerima"}
-                      </th>
-                      <th className="py-3 px-3">{en ? "Package" : "Paket"}</th>
-                      <th className="py-3 px-3">Status</th>
-                      <th className="py-3 px-4 text-right">
-                        {en ? "Action" : "Aksi"}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line/40 text-sm">
-                    {filteredVouchers.map((v) => (
-                      <tr
-                        key={v.id}
-                        className="hover:bg-nested/40 transition-colors"
-                      >
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="font-mono font-bold text-ink-primary">
-                            {v.short_code}
-                          </div>
-                          <div className="font-mono text-[11px] text-ink-muted">
-                            {v.id}
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <div className="font-semibold text-ink-primary leading-snug">
-                            {v.beneficiary_name}
-                          </div>
-                          <div className="text-xs text-ink-muted">
-                            {v.rt_rw}
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <div className="text-ink-body line-clamp-1 font-medium">
-                            {v.commodity_name}
-                          </div>
-                          <div className="font-mono text-xs text-ink-secondary tabular-nums mt-0.5">
-                            {formatRupiah(v.nominal_idr)}
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
-                              v.status === "ACTIVE"
-                                ? "bg-emeraldTech/12 text-emeraldTech"
-                                : v.status === "REDEEMED"
-                                  ? "bg-amberTech/12 text-amberTech"
-                                  : "bg-nested text-ink-secondary"
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                v.status === "ACTIVE"
-                                  ? "bg-emeraldTech"
-                                  : v.status === "REDEEMED"
-                                    ? "bg-amberTech"
-                                    : "bg-ink-muted"
-                              }`}
-                            />
-                            {formatStatusLabel(v.status, lang)}
-                          </span>
-                          {v.redeemed_by_merchant_name && (
-                            <div className="text-[11px] text-ink-muted mt-1 max-w-[180px] truncate">
-                              {v.redeemed_by_merchant_name}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => onOpenVoucherCard(v)}
-                            className="px-3 py-1.5 rounded-lg bg-nested hover:bg-elevated text-ink-primary border border-line/60 text-xs font-semibold transition"
-                          >
-                            {en ? "Print / SMS" : "Cetak / SMS"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredVouchers.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="py-10 text-center text-ink-muted text-sm"
-                        >
-                          {en
-                            ? "No matching vouchers found."
-                            : "Tidak ada kupon yang cocok."}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="px-4 py-3 bg-surface/60 border-t border-line/45 flex items-center justify-between text-xs text-ink-muted">
-                <span className="tabular-nums">
-                  {en
-                    ? `Showing ${filteredVouchers.length} of ${vouchers.length} vouchers`
-                    : `Menampilkan ${filteredVouchers.length} dari ${vouchers.length} kupon`}
-                </span>
-                <span className="font-semibold text-emeraldTech">
-                  {en ? "Community Vouchers" : "Kupon Sembako"}
-                </span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="p-3.5 bg-surface/40 border-b border-line/45">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    value={beneficiarySearch}
-                    onChange={(e) => setBeneficiarySearch(e.target.value)}
-                    placeholder={
-                      en
-                        ? "Search beneficiary name, village, or category..."
-                        : "Cari nama warga, desa, atau kategori..."
-                    }
-                    className="w-full h-10 pl-10 pr-3.5 rounded-xl bg-card border border-line/70 focus:border-cta-bg text-sm text-ink-primary placeholder:text-ink-muted outline-none"
+                    value={newMerchantRtRw}
+                    onChange={(e) => setNewMerchantRtRw(e.target.value)}
+                    placeholder={en ? "Address" : "Alamat kedai"}
+                    className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
                   />
                 </div>
-              </div>
-
-              <div className="overflow-x-auto max-h-[540px] overflow-y-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-nested border-b border-line/50 text-xs font-semibold text-ink-secondary">
-                      <th className="py-3 px-4">No / ID</th>
-                      <th className="py-3 px-3">
-                        {en ? "Name & Address" : "Nama & Desa"}
-                      </th>
-                      <th className="py-3 px-3">
-                        {en ? "Category" : "Kategori"}
-                      </th>
-                      <th className="py-3 px-3 text-center">
-                        {en ? "Vouchers" : "Kupon"}
-                      </th>
-                      <th className="py-3 px-4 text-right">
-                        {en ? "Action" : "Aksi"}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line/40 text-sm">
-                    {filteredBeneficiaries.map((b, idx) => {
-                      const countVouchers = vouchers.filter(
-                        (v) => v.beneficiary_id === b.id
-                      ).length;
-                      return (
-                        <tr
-                          key={b.id}
-                          className="hover:bg-nested/40 transition-colors"
-                        >
-                          <td className="py-3 px-4 whitespace-nowrap font-mono text-xs text-ink-muted">
-                            <div className="font-bold text-ink-primary">
-                              {idx + 1}. {b.id}
-                            </div>
-                            <div>
-                              {b.household_size} {en ? "ppl" : "org"}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="font-semibold text-ink-primary">
-                              {b.name}
-                            </div>
-                            <div className="text-xs text-ink-muted">
-                              {b.rt_rw} · {b.phone}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-xs text-ink-secondary">
-                            {b.category}
-                          </td>
-                          <td className="py-3 px-3 text-center font-mono text-xs font-bold text-ink-primary">
-                            {countVouchers}
-                          </td>
-                          <td className="py-3 px-4 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedBeneficiaryId(b.id);
-                                onNotifySelectedBeneficiary(b.name);
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold transition"
-                            >
-                              {en ? "Select" : "Pilih"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="px-4 py-3 bg-surface/60 border-t border-line/45 flex items-center justify-between text-xs text-ink-muted">
-                <span className="tabular-nums">
-                  {en
-                    ? `Showing ${filteredBeneficiaries.length} of ${beneficiaries.length} beneficiaries`
-                    : `Total ${filteredBeneficiaries.length} dari ${beneficiaries.length} penerima bansos`}
-                </span>
-                <span className="font-semibold text-emeraldTech">
-                  {en ? "Synthetic Sample Dataset" : "Data Simulasi Komunitas"}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      <section className={styles.module} id="coordinator-merchants">
-        <div className={styles.moduleHead}>
-          <h2>{en ? "Partner stores" : "Kedai Mitra"}</h2>
-          <button type="button" onClick={() => { setShowAddResidentForm(false); setShowAddMerchantForm(true); document.getElementById("coordinator-operations")?.scrollIntoView({ block: "start" }); }}><Store size={15} /> {en ? "Add store" : "Tambah Kedai"}</button>
-        </div>
-        {merchants.length ? <div className="overflow-x-auto mt-3"><table className="w-full text-left text-sm">
-          <thead><tr><th scope="col" className="p-3">{en ? "Store ID" : "ID Kedai"}</th><th scope="col" className="p-3">{en ? "Store name" : "Nama Kedai"}</th></tr></thead>
-          <tbody>{merchants.map(merchant => <tr key={merchant.id} className="border-b border-line"><td className="p-3"><code>{merchant.id}</code></td><td className="p-3">{merchant.name}</td></tr>)}</tbody>
-        </table></div> : <p className={styles.empty}>{en ? "No stores registered." : "Belum ada kedai terdaftar."}</p>}
-      </section>
+                <input
+                  type="text"
+                  value={newMerchantBank}
+                  onChange={(e) => setNewMerchantBank(e.target.value)}
+                  placeholder={en ? "Bank account / QRIS" : "Rekening / QRIS"}
+                  className="w-full h-11 px-3.5 rounded-xl bg-card border border-line focus:border-cta-bg text-sm text-ink-primary outline-none"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => creationDrawer.current?.close()}
+                    className="px-3.5 py-2 rounded-lg text-xs font-semibold text-ink-muted hover:text-ink-primary"
+                  >
+                    {en ? "Cancel" : "Batal"}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-cta-bg hover:opacity-90 text-cta-ink text-xs font-semibold"
+                  >
+                    {en ? "Save" : "Simpan"}
+                  </button>
+                </div>
+              </form>)}
+        {creation === "FUNDS" && (<form onSubmit={submitTopup} className={resourceStyles.createForm}>
+                <input
+                  aria-label={en ? "Top-up amount" : "Nominal tambah dana"} required type="number"
+                  min={10000}
+                  step={10000}
+                  value={topupAmount}
+                  onChange={(e) => setTopupAmount(e.target.value)}
+                  className="w-full h-9 px-2.5 rounded-lg bg-surface border border-line text-xs font-mono text-ink-primary outline-none"
+                  placeholder="2000000"
+                />
+                <button
+                  type="submit"
+                  className="px-3 h-9 rounded-lg bg-cta-bg text-cta-ink text-xs font-bold shrink-0"
+                >
+                  {en ? "Add" : "Tambah"}
+                </button>
+              </form>)}
+        {creation === "PACKAGES" && <form className={resourceStyles.createForm} onSubmit={submitPkg}>
+          <label>{en ? "Package name" : "Nama paket"}<input required value={pkgName} onChange={(event) => setPkgName(event.target.value)} /></label>
+          <label>{en ? "Package contents" : "Isi paket"}<textarea required rows={3} value={pkgItems} onChange={(event) => setPkgItems(event.target.value)} /></label>
+          <label>{en ? "Amount (IDR)" : "Nominal (Rp)"}<input required type="number" min={5000} step={5000} value={pkgNominal} onChange={(event) => setPkgNominal(event.target.value)} /></label>
+          <button type="submit" className={resourceStyles.primary}>{en ? "Save package" : "Simpan Paket"}</button>
+        </form>}
+      </dialog>
     </div>
   );
 }

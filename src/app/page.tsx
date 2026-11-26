@@ -67,6 +67,7 @@ import {
 import AuthGate from "@/components/AuthGate";
 import BrandLogo from "@/components/BrandLogo";
 import CoordinatorTab from "@/components/CoordinatorTab";
+import type { ResourceView } from "@/components/CoordinatorResources";
 import CoordinatorSearch from "@/components/CoordinatorSearch";
 import workspace from "@/components/CoordinatorWorkspace.module.css";
 import { Menu, PanelLeftClose, PanelLeftOpen, Plus, Users, X as CloseMenu } from "lucide-react";
@@ -191,9 +192,8 @@ export default function CivicLedgerApp() {
   const [showFullHashes, setShowFullHashes] = useState<boolean>(false);
 
   // Panel Kanan Beranda Pengurus: Daftar Kupon vs Daftar Penerima (20 orang)
-  const [coordinatorRightView, setCoordinatorRightView] = useState<
-    "VOUCHERS" | "BENEFICIARIES"
-  >("VOUCHERS");
+  const [coordinatorRightView, setCoordinatorRightView] = useState<ResourceView>("VOUCHERS");
+  const [fullCoordinatorResources, setFullCoordinatorResources] = useState(false);
   const [beneficiarySearch, setBeneficiarySearch] = useState<string>("");
 
   // Form Pengurus
@@ -208,8 +208,6 @@ export default function CivicLedgerApp() {
   >("ALL");
 
   // Form Tambah Warga & Kedai
-  const [showAddResidentForm, setShowAddResidentForm] =
-    useState<boolean>(false);
   const [newResidentName, setNewResidentName] = useState<string>("");
   const [newResidentRtRw, setNewResidentRtRw] = useState<string>(
     "Desa Sitoluama, Laguboti"
@@ -220,8 +218,6 @@ export default function CivicLedgerApp() {
   const [newResidentPhone, setNewResidentPhone] =
     useState<string>("0812-6300-0000");
 
-  const [showAddMerchantForm, setShowAddMerchantForm] =
-    useState<boolean>(false);
   const [newMerchantName, setNewMerchantName] = useState<string>("");
   const [newMerchantOwner, setNewMerchantOwner] = useState<string>("");
   const [newMerchantRtRw, setNewMerchantRtRw] =
@@ -848,7 +844,6 @@ export default function CivicLedgerApp() {
       await applyServerState(data.state);
       setSelectedBeneficiaryId(data.beneficiary.id);
       setNewResidentName("");
-      setShowAddResidentForm(false);
       showToast("success", `${data.beneficiary.name} masuk daftar penerima.`);
     } catch (err: unknown) {
       showToast(
@@ -883,7 +878,6 @@ export default function CivicLedgerApp() {
       setActiveMerchantId(data.merchant.id);
       setNewMerchantName("");
       setNewMerchantOwner("");
-      setShowAddMerchantForm(false);
       showToast("success", `${data.merchant.name} berhasil didaftarkan.`);
     } catch (err: unknown) {
       showToast(
@@ -1674,9 +1668,9 @@ export default function CivicLedgerApp() {
     setCpError("");
     setShowChangePasswordModal(true);
   };
-  function gotoCoordinator(id: string, view?: "VOUCHERS" | "BENEFICIARIES", open = false) {
+  function gotoCoordinator(id: string, view?: ResourceView, open = false) {
     setActiveTab("COORDINATOR");
-    if (view) setCoordinatorRightView(view);
+    if (view) { setCoordinatorRightView(view); setFullCoordinatorResources(true); }
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const target = document.getElementById(id);
       if (open) target?.click();
@@ -1687,7 +1681,8 @@ export default function CivicLedgerApp() {
     { label: lang === "en" ? "Analytics" : "Analitik", id: "coordinator-analytics", icon: BarChart3 },
     { label: lang === "en" ? "Manage vouchers" : "Kelola Kupon", id: "coordinator-operations", view: "VOUCHERS" as const, icon: QrCode },
     { label: lang === "en" ? "Resident records" : "Data Warga", id: "coordinator-operations", view: "BENEFICIARIES" as const, icon: Users },
-    { label: lang === "en" ? "Partner stores" : "Kedai Mitra", id: "coordinator-merchants", icon: Landmark },
+    { label: lang === "en" ? "Partner stores" : "Kedai Mitra", id: "coordinator-operations", view: "MERCHANTS" as const, icon: Landmark },
+    { label: lang === "en" ? "Food packages" : "Paket Sembako", id: "coordinator-operations", view: "PACKAGES" as const, icon: QrCode },
   ].filter((item) => item.label.toLowerCase().includes(menuQuery));
   function openVoucher(voucher: Voucher) {
     setWalletBeneficiaryId(voucher.beneficiary_id);
@@ -2270,10 +2265,6 @@ export default function CivicLedgerApp() {
                     setSelectedCommodityCode={setSelectedCommodityCode}
                     validityHours={validityHours}
                     setValidityHours={setValidityHours}
-                    showAddResidentForm={showAddResidentForm}
-                    setShowAddResidentForm={setShowAddResidentForm}
-                    showAddMerchantForm={showAddMerchantForm}
-                    setShowAddMerchantForm={setShowAddMerchantForm}
                     newResidentName={newResidentName}
                     setNewResidentName={setNewResidentName}
                     newResidentRtRw={newResidentRtRw}
@@ -2292,6 +2283,9 @@ export default function CivicLedgerApp() {
                     setNewMerchantBank={setNewMerchantBank}
                     coordinatorRightView={coordinatorRightView}
                     setCoordinatorRightView={setCoordinatorRightView}
+                    fullResources={fullCoordinatorResources}
+                    onFullResources={() => setFullCoordinatorResources(true)}
+                    onCopyVoucherSms={handleCopySmsSlip}
                     voucherStatusFilter={voucherStatusFilter}
                     setVoucherStatusFilter={setVoucherStatusFilter}
                     voucherSearch={voucherSearch}
@@ -2308,8 +2302,8 @@ export default function CivicLedgerApp() {
                       showToast(
                         "info",
                         lang === "en"
-                          ? `${name} selected. Choose a package on the left and click Issue Signed Voucher.`
-                          : `${name} dipilih di form kiri. Pilih paket lalu klik Buat Kupon Sembako.`
+                          ? `${name} selected. Choose a package and click Issue Signed Voucher.`
+                          : `${name} dipilih. Pilih paket lalu klik Buat Kupon Sembako.`
                       )
                     }
                   />
