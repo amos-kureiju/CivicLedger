@@ -92,3 +92,11 @@ body {
     color: #1d2622 !important;
   }
 }
+
+/* Only the citizen page is captured. The shared shell stays live. */
+html[data-citizen-transition] { view-transition-name: none; }
+html[data-citizen-transition]::view-transition { pointer-events: none; }
+html[data-citizen-transition]::view-transition-old(citizen-page) { animation: citizen-page-out 220ms cubic-bezier(.22, 1, .36, 1) both; }
+html[data-citizen-transition]::view-transition-new(citizen-page) { animation: citizen-page-in 260ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes citizen-page-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes citizen-page-in { from { opacity: 0; transform: translateY(7px); } }
