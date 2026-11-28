@@ -10,3 +10,5 @@
 .preview { color: rgb(var(--ink-secondary)); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 480px) { .rows select { width: 100%; } }
+
+.rows .language { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }

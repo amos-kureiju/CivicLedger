@@ -35,11 +35,11 @@ export default function CitizenSettingsPage(p: Props) {
         </select></label>
         <p className={styles.preview}>{t.preview}</p>
       </section>
-      <section>
+      <section className={styles.language}>
         <h2>{t.language}</h2>
-        <label>{t.language}<select value={p.lang} onChange={(event) => p.onLanguage(event.target.value === "en" ? "en" : "id")}>
+        <select aria-label={t.language} value={p.lang} onChange={(event) => p.onLanguage(event.target.value === "en" ? "en" : "id")}>
           <option value="id" lang="id">Indonesia</option><option value="en" lang="en">English</option>
-        </select></label>
+        </select>
       </section>
       <section>
         <h2>{t.security}</h2>

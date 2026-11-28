@@ -255,3 +255,6 @@
   .tabs[data-count="3"] { --ready-width: 26%; --used-width: 25%; --expired-width: 49%; }
 }
 @media (prefers-reduced-motion: reduce) { .portal.portal { transition: none; } }
+
+.activeRail[data-footer="true"] { --corner-cutout: 8px; }
+.portal > aside .sidebarFooter button:last-child { position: relative; z-index: 1; margin-top: 5px; }
