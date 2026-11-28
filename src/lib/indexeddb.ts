@@ -194,17 +194,22 @@ export async function getOfflineRedemptionQueue(): Promise<
   }
 }
 
-export async function clearSyncedOfflineRedemptions(): Promise<void> {
+export async function clearSyncedOfflineRedemptions(queueIds?: string[]): Promise<void> {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_QUEUE, "readwrite");
-    tx.objectStore(STORE_QUEUE).clear();
+    const store = tx.objectStore(STORE_QUEUE);
+    if (queueIds) {
+      for (const id of queueIds) store.delete(id);
+    } else {
+      store.clear();
+    }
     return new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch {
-    // Ignore
+  } catch (error) {
+    if (queueIds) throw error;
   }
 }
 

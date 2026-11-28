@@ -77,6 +77,8 @@ import workspace from "@/components/CoordinatorWorkspace.module.css";
 import { Menu, PanelLeftClose, Settings, X as CloseMenu } from "lucide-react";
 import BeneficiaryTab from "@/components/BeneficiaryTab";
 import MerchantPosTab from "@/components/MerchantPosTab";
+import MerchantWorkspace, { maskSettlementAccount } from "@/components/MerchantWorkspace";
+import checkout from "@/components/MerchantWorkspace.module.css";
 import ClearinghouseTab from "@/components/ClearinghouseTab";
 import PasswordModal from "@/components/PasswordModal";
 import ReportsComplianceTab from "@/components/ReportsComplianceTab";
@@ -265,6 +267,20 @@ export default function CivicLedgerApp() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<number | null>(null);
+  const cameraRequest = useRef(0);
+  const [cameraPending, setCameraPending] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const uploadBusy = useRef(false);
+  const [uploadPending, setUploadPending] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const verificationBusy = useRef(false);
+  const syncBusy = useRef(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState("");
+  const [verifiedExpiry, setVerifiedExpiry] = useState("");
+  const [offlineSimulation, setOfflineSimulation] = useState(false);
+  const [merchantRejections, setMerchantRejections] = useState(0);
+  const [merchantSyncIds, setMerchantSyncIds] = useState<string[]>([]);
 
   const showToast = useCallback(
     (type: "success" | "warning" | "error" | "info", text: string) => {
@@ -376,6 +392,17 @@ export default function CivicLedgerApp() {
     setCurrentUser(null);
     setActionBanner(null);
     setCryptoTrace(null);
+    stopCamera();
+    if (currentUser?.role === "MERCHANT") {
+      setScannerInputCode("");
+      setScannedQRPayloadRaw("");
+      setVerificationError("");
+      setUploadError("");
+      setCameraError("");
+      setMerchantRejections(0);
+      if (offlineSimulation) setIsOfflineMode(!deviceOnline);
+      setOfflineSimulation(false);
+    }
   };
 
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
@@ -639,6 +666,9 @@ export default function CivicLedgerApp() {
   }, [selectedVoucherForQR]);
 
   const stopCamera = useCallback(() => {
+    cameraRequest.current += 1;
+    setCameraPending(false);
+    if (videoRef.current) videoRef.current.srcObject = null;
     if (scanTimerRef.current) {
       window.clearInterval(scanTimerRef.current);
       scanTimerRef.current = null;
@@ -659,6 +689,9 @@ export default function CivicLedgerApp() {
       stopCamera();
       return;
     }
+    const request = ++cameraRequest.current;
+    setCameraError("");
+    setCameraPending(true);
     try {
       let stream: MediaStream;
       try {
@@ -666,21 +699,32 @@ export default function CivicLedgerApp() {
           video: { facingMode: { ideal: "environment" } },
           audio: false,
         });
-      } catch {
+      } catch (error) {
+        if (request !== cameraRequest.current) return;
+        if (error instanceof DOMException && error.name === "NotAllowedError") throw error;
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
         });
       }
 
+      if (request !== cameraRequest.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       mediaStreamRef.current = stream;
       setCameraActive(true);
       setCameraDetectSupported(true);
 
       setTimeout(() => {
+        if (request !== cameraRequest.current) return;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          void videoRef.current.play().catch(() => {});
+          void videoRef.current.play().catch(() => {
+            if (request !== cameraRequest.current) return;
+            stopCamera();
+            setCameraError(lang === "en" ? "Camera preview could not start." : "Pratinjau kamera tidak dapat dimulai.");
+          });
         }
 
         const offscreenCanvas = document.createElement("canvas");
@@ -741,27 +785,53 @@ export default function CivicLedgerApp() {
         }, 180);
       }, 150);
     } catch {
+      if (request !== cameraRequest.current) return;
+      setCameraError(lang === "en"
+        ? "Cannot access camera. Allow camera permission, upload a photo, or enter a code."
+        : "Kamera tidak bisa dibuka. Izinkan akses kamera, unggah foto, atau ketik kode.");
       showToast(
         "warning",
         lang === "en"
           ? "Cannot access camera. Allow browser camera permission, upload a QR photo, or type the code."
           : "Kamera tidak bisa dibuka. Izinkan akses kamera di browser, unggah foto QR, atau ketik kodenya langsung."
       );
+    } finally {
+      if (request === cameraRequest.current) setCameraPending(false);
     }
   };
 
   const handleUploadQrFile = (file: File) => {
+    if (uploadBusy.current || verificationBusy.current) return;
+    uploadBusy.current = true;
+    setUploadPending(true);
+    setUploadError("");
+    const finish = () => {
+      uploadBusy.current = false;
+      setUploadPending(false);
+    };
+    const fail = (message: string) => {
+      setUploadError(message);
+      showToast("warning", message);
+      finish();
+    };
+    const unreadable = lang === "en" ? "This file could not be opened as an image." : "File ini tidak dapat dibuka sebagai gambar.";
+    if (file.type && !file.type.startsWith("image/")) {
+      fail(unreadable);
+      return;
+    }
     const reader = new FileReader();
+    reader.onerror = () => fail(unreadable);
     reader.onload = () => {
       const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      if (!dataUrl) return;
+      if (!dataUrl) { fail(unreadable); return; }
       const img = new Image();
+      img.onerror = () => fail(unreadable);
       img.onload = () => {
         const canvas = document.createElement("canvas");
         canvas.width = img.naturalWidth || img.width;
         canvas.height = img.naturalHeight || img.height;
         const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        if (!ctx) { fail(unreadable); return; }
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const qrResult = jsQR(
@@ -772,8 +842,7 @@ export default function CivicLedgerApp() {
         );
 
         if (!qrResult || !qrResult.data) {
-          showToast(
-            "warning",
+          fail(
             lang === "en"
               ? "No QR code detected in the uploaded image. Try a clearer photo."
               : "QR tidak terbaca di gambar tersebut. Coba foto QR yang lebih jelas."
@@ -785,6 +854,7 @@ export default function CivicLedgerApp() {
         const decoded = decodeVoucherQRPayload(rawText);
         const resolvedCode = decoded ? decoded.code : rawText.toUpperCase();
 
+        finish();
         playScanBeep();
         setScannedQRPayloadRaw(decoded ? rawText : "");
         setScannerInputCode(resolvedCode);
@@ -998,16 +1068,46 @@ export default function CivicLedgerApp() {
     showToast("info", `Teks SMS untuk kupon ${voucher.short_code} disalin.`);
   };
 
-  const handleVerifyAndRedeem = async (
+  const handleVerifyAndRedeem = async (simulate = false, raw?: string, code?: string) => {
+    if (verificationBusy.current || (currentUser?.role === "MERCHANT" && syncBusy.current)) return;
+    verificationBusy.current = true;
+    setVerifying(true);
+    const merchantRequest = currentUser?.role === "MERCHANT";
+    if (merchantRequest) {
+      setCryptoTrace(null);
+      setVerificationError("");
+      setVerifiedExpiry("");
+    }
+    try {
+      await verifyAndRedeem(simulate, raw, code);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Penukaran gagal";
+      setVerificationError(message);
+      showToast("error", message);
+    } finally {
+      verificationBusy.current = false;
+      setVerifying(false);
+    }
+  };
+
+  const verifyAndRedeem = async (
     simulateTamperFraud = false,
     overrideQrRaw?: string,
     overrideCode?: string
   ) => {
     const t0 = performance.now();
-    const merchant =
-      merchants.find((m) => m.id === activeMerchantId) || merchants[0];
+    const isMerchant = currentUser?.role === "MERCHANT";
+    const offlineCheckout = isMerchant ? offlineSimulation || !navigator.onLine : isOfflineMode;
+    const merchant = isMerchant
+      ? merchants.find((m) => m.id === currentUser.linked_merchant_id)
+      : merchants.find((m) => m.id === activeMerchantId) || merchants[0];
+    const reject = (message: string, voucherRejected = true) => {
+      if (isMerchant && voucherRejected) setMerchantRejections((count) => count + 1);
+      setVerificationError(message);
+      showToast("error", message);
+    };
     if (!merchant) {
-      showToast("error", "Pilih kedai yang sedang melayani.");
+      reject("Pilih kedai yang sedang melayani.", false);
       return;
     }
 
@@ -1054,12 +1154,12 @@ export default function CivicLedgerApp() {
     }
 
     if (!targetVoucher) {
-      showToast(
-        "error",
-        "Kode kupon tidak ditemukan. Pilih dari daftar cepat atau ketik kode seperti CL-8841-K9."
+      reject(
+        lang === "en" ? "Voucher code not found. Check the code and try again." : "Kode kupon tidak ditemukan. Periksa kode dan coba lagi."
       );
       return;
     }
+    setVerifiedExpiry(targetVoucher.expires_at);
 
     const clientTxId = generateClientTxId();
 
@@ -1088,6 +1188,7 @@ export default function CivicLedgerApp() {
     const durationMs = Math.max(1, Math.round(performance.now() - t0));
 
     if (!verification.valid) {
+      if (isMerchant && !simulateTamperFraud) setMerchantRejections((count) => count + 1);
       setFraudBlockedCount((c) => c + 1);
       setCryptoTrace({
         timestamp: new Date().toISOString(),
@@ -1104,15 +1205,20 @@ export default function CivicLedgerApp() {
         hmacValid: false,
         doubleSpendCheckPassed: doubleSpendPassed,
         expiryCheckPassed: expiryPassed,
-        mode: isOfflineMode ? "OFFLINE_INDEXEDDB" : "ONLINE",
+        mode: offlineCheckout ? "OFFLINE_INDEXEDDB" : "ONLINE",
         errorReason:
-          "Nominal kupon tidak sesuai data asli (diubah ke Rp 500.000). Transaksi ditolak otomatis.",
+          currentUser?.role !== "MERCHANT"
+            ? "Nominal kupon tidak sesuai data asli (diubah ke Rp 500.000). Transaksi ditolak otomatis."
+            : simulateTamperFraud
+            ? "Nominal kupon diubah untuk simulasi. Transaksi ditolak."
+            : lang === "en" ? "The voucher signature does not match. Transaction rejected." : "Tanda tangan kupon tidak cocok. Transaksi ditolak.",
       });
       showToast("error", "Kupon palsu terdeteksi dan langsung ditolak.");
       return;
     }
 
     if (!doubleSpendPassed) {
+      if (isMerchant) setMerchantRejections((count) => count + 1);
       setFraudBlockedCount((c) => c + 1);
       setCryptoTrace({
         timestamp: new Date().toISOString(),
@@ -1129,8 +1235,8 @@ export default function CivicLedgerApp() {
         hmacValid: true,
         doubleSpendCheckPassed: false,
         expiryCheckPassed: expiryPassed,
-        mode: isOfflineMode ? "OFFLINE_INDEXEDDB" : "ONLINE",
-        errorReason: `Kupon ${targetVoucher.short_code} sudah pernah dipakai sebelumnya.`,
+        mode: offlineCheckout ? "OFFLINE_INDEXEDDB" : "ONLINE",
+        errorReason: isMerchant && lang === "en" ? `Voucher ${targetVoucher.short_code} has already been used.` : `Kupon ${targetVoucher.short_code} sudah pernah dipakai sebelumnya.`,
       });
       showToast(
         "error",
@@ -1140,10 +1246,7 @@ export default function CivicLedgerApp() {
     }
 
     if (!expiryPassed) {
-      showToast(
-        "error",
-        `Kupon ${targetVoucher.short_code} sudah lewat masa berlakunya.`
-      );
+      reject(isMerchant && lang === "en" ? `Voucher ${targetVoucher.short_code} has expired.` : `Kupon ${targetVoucher.short_code} sudah lewat masa berlakunya.`);
       return;
     }
 
@@ -1152,7 +1255,7 @@ export default function CivicLedgerApp() {
       `${clientTxId}|${targetVoucher.id}|${merchant.id}|${targetVoucher.nominal_idr}|${redeemedAtIso}|${targetVoucher.hmac_signature}`
     );
 
-    if (isOfflineMode) {
+    if (offlineCheckout) {
       const queueItem: OfflineRedemptionQueueItem = {
         queue_id: `OFF-${Date.now()}-${Math.floor(Math.random() * 999)}`,
         client_tx_id: clientTxId,
@@ -1232,7 +1335,10 @@ export default function CivicLedgerApp() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Penukaran gagal");
+      if (!res.ok) {
+        reject(data.error || "Penukaran gagal", res.status < 500);
+        return;
+      }
 
       await applyServerState(data.state);
 
@@ -1260,24 +1366,25 @@ export default function CivicLedgerApp() {
         `Kupon ${targetVoucher.short_code} diterima di ${merchant.name} (${formatRupiah(targetVoucher.nominal_idr)}).`
       );
     } catch (err: unknown) {
-      showToast(
-        "error",
-        err instanceof Error ? err.message : "Penukaran gagal"
-      );
+      reject(err instanceof Error ? err.message : "Penukaran gagal", false);
     }
   };
 
-  const handleSimulateOfflineConflict = async () => {
+  const handleSimulateOfflineConflict = async (merchantDemo?: { merchant: Merchant; vouchers: Voucher[] }) => {
     const candidate =
+      merchantDemo ? merchantDemo.vouchers.find((v) => v.redeemed_by_merchant_id === merchantDemo.merchant.id && (v.status === "REDEEMED" || v.status === "SETTLED")) :
       vouchers.find((v) => v.status === "REDEEMED") ||
       (offlineQueue.length > 0
         ? vouchers.find((v) => v.id === offlineQueue[0].voucher_id)
         : null) ||
       vouchers[0];
 
-    if (!candidate) return;
+    if (!candidate) {
+      if (merchantDemo) showToast("warning", lang === "en" ? "Accept a demo voucher before running the duplicate test." : "Terima kupon demo sebelum menjalankan tes kupon ganda.");
+      return;
+    }
     const altMerchant =
-      merchants.find((m) => m.id !== candidate.redeemed_by_merchant_id) ||
+      merchantDemo?.merchant || merchants.find((m) => m.id !== candidate.redeemed_by_merchant_id) ||
       merchants[1] ||
       merchants[0];
     if (!altMerchant) return;
@@ -1309,6 +1416,7 @@ export default function CivicLedgerApp() {
     };
 
     setIsOfflineMode(true);
+    if (merchantDemo) setOfflineSimulation(true);
     await enqueueOfflineRedemption(conflictItem, true);
     const updatedQueue = await getOfflineRedemptionQueue();
     setOfflineQueue(updatedQueue);
@@ -1320,7 +1428,10 @@ export default function CivicLedgerApp() {
   };
 
   const handleSyncOfflineBatch = async () => {
-    if (offlineQueue.length === 0) return;
+    const scoped = currentUser?.role === "MERCHANT";
+    const pending = scoped ? offlineQueue.filter((item) => item.merchant_id === currentUser.linked_merchant_id) : offlineQueue;
+    if (pending.length === 0 || syncBusy.current || (scoped && verificationBusy.current)) return;
+    syncBusy.current = true;
     setIsSyncingBatch(true);
     try {
       const res = await fetch("/api/clearinghouse", {
@@ -1328,14 +1439,25 @@ export default function CivicLedgerApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "BATCH_SYNC",
-          redemptions: offlineQueue,
+          redemptions: pending,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Pengiriman catatan gagal");
 
-      await clearSyncedOfflineRedemptions();
-      setOfflineQueue([]);
+      if (scoped) {
+        const results: BatchSyncResultItem[] = data.results ?? [];
+        const completed = new Set(results.map((result) => result.client_tx_id));
+        const ids = pending.filter((item) => completed.has(item.client_tx_id)).map((item) => item.queue_id);
+        await clearSyncedOfflineRedemptions(ids);
+        setOfflineQueue((queue) => queue.filter((item) => !ids.includes(item.queue_id)));
+        setMerchantSyncIds(pending.map((item) => item.client_tx_id));
+        setOfflineSimulation(false);
+      } else {
+        await clearSyncedOfflineRedemptions();
+        setOfflineQueue([]);
+        setMerchantSyncIds([]);
+      }
       setIsOfflineMode(false);
       setLastSyncResults(data.results || []);
       await applyServerState(data.state);
@@ -1353,6 +1475,7 @@ export default function CivicLedgerApp() {
         err instanceof Error ? err.message : "Pengiriman gagal"
       );
     } finally {
+      syncBusy.current = false;
       setIsSyncingBatch(false);
     }
   };
@@ -1465,7 +1588,14 @@ export default function CivicLedgerApp() {
   };
 
   const handleExportJson = () => {
-    const snapshot = {
+    const exportMerchantId = currentUser?.linked_merchant_id;
+    const snapshot = currentUser?.role === "MERCHANT" ? {
+      diunduh_pada: new Date().toISOString(),
+      daftar_kedai: merchants.filter((item) => item.id === exportMerchantId).map((item) => ({ ...item, bank_account: maskSettlementAccount(item.bank_account) })),
+      riwayat_penukaran: ledger.filter((item) => item.merchant_id === exportMerchantId),
+      riwayat_offline: reconciliationLogs.filter((item) => item.merchant_id === exportMerchantId),
+      bukti_pencairan: settlementBatches.filter((item) => item.merchant_id === exportMerchantId).map((item) => ({ ...item, bank_account: maskSettlementAccount(item.bank_account) })),
+    } : {
       diunduh_pada: new Date().toISOString(),
       proyek: "CivicLedger — Resilient Local Voucher Clearinghouse",
       tim: "Run.exe (STACK 2026 by GDGoC ITB — Kasus 2)",
@@ -1681,13 +1811,29 @@ export default function CivicLedgerApp() {
         onToggleLargeText={updateLargeText}
         onAuthenticated={(user) => {
           applyAuthenticatedUser(user);
-          if (user.role !== "COORDINATOR") showToast("success", `Halo, ${user.name} (${user.role_label}).`);
+          if (user.role === "BENEFICIARY") showToast("success", `Halo, ${user.name} (${user.role_label}).`);
         }}
       />
     );
   }
 
   const organizer = currentUser.role === "COORDINATOR";
+  const merchantRole = currentUser.role === "MERCHANT";
+  const workspaceShell = organizer || merchantRole;
+  const merchantId = merchantRole ? currentUser.linked_merchant_id : undefined;
+  const activeMerchant = merchants.find((merchant) => merchant.id === merchantId);
+  const merchantLedger = ledger.filter((entry) => entry.merchant_id === merchantId);
+  const merchantQueue = offlineQueue.filter((item) => item.merchant_id === merchantId);
+  const merchantReceipt = merchantLedger.find((entry) => entry.client_tx_id === cryptoTrace?.clientTxId)
+    ?? merchantQueue.find((entry) => entry.client_tx_id === cryptoTrace?.clientTxId);
+  const recipientName = merchantReceipt
+    ? vouchers.find((voucher) => voucher.id === merchantReceipt.voucher_id && voucher.beneficiary_id === merchantReceipt.beneficiary_id)?.beneficiary_name
+    : undefined;
+  const demoMerchant = merchantRole && merchantId === "WRG-01" && currentUser.email === "kedai@civicledger.id";
+  const demoVouchers = demoMerchant ? vouchers.filter((voucher) =>
+    ["VCH-2026-8841", "VCH-2026-7732", "VCH-2026-6619", "VCH-2026-5508"].includes(voucher.id) &&
+    (!voucher.redeemed_by_merchant_id || voucher.redeemed_by_merchant_id === merchantId)
+  ) : [];
   const opsNav = navItems.filter((i) => i.section === "OPERATIONS");
   const clearNav = navItems.filter((i) => i.section === "CLEARINGHOUSE");
   const openPassword = () => {
@@ -1711,17 +1857,20 @@ export default function CivicLedgerApp() {
 
   const reminders = organizer ? getOperationalReminders(vouchers, offlineQueue.length, lang === "en") : [];
   function organizerNavigation() {
-    const groups = [
+    const groups = merchantRole ? [{ name: lang === "en" ? "Checkout" : "Kasir Kedai", entries: navItems }] : [
       { name: "Workspace", entries: opsNav },
       { name: "Management", entries: clearNav },
     ];
     return (
-      <nav className={workspace.organizerNav} aria-label={lang === "en" ? "Organizer navigation" : "Navigasi pengurus"}>
+      <nav className={workspace.organizerNav} aria-label={merchantRole ? (lang === "en" ? "Merchant navigation" : "Navigasi kedai") : (lang === "en" ? "Organizer navigation" : "Navigasi pengurus")}>
         {groups.map(({ name, entries }) => (
           <div key={name} className={workspace.navGroup}>
             <p>{name}</p>
             {entries.map(({ id, label, icon: Icon }) => {
-              const title = id === "COORDINATOR" ? "Dashboard" : id === "CLEARINGHOUSE" ? (lang === "en" ? "Fund Settlement" : "Pencairan Dana") : label;
+              const title = id === "COORDINATOR" ? "Dashboard"
+                : merchantRole && id === "MERCHANT_POS" ? (lang === "en" ? "Checkout & QR Scan" : "Kasir & Scan QR")
+                : id === "CLEARINGHOUSE" ? (merchantRole ? (lang === "en" ? "Balance & History" : "Saldo & Riwayat") : (lang === "en" ? "Fund Settlement" : "Pencairan Dana"))
+                : label;
               return (
                 <button key={id} type="button" title={title} aria-label={title} aria-current={id === activeTab ? "page" : undefined} onClick={(event) => {
                   const button = event.currentTarget;
@@ -1746,7 +1895,7 @@ export default function CivicLedgerApp() {
           </div>
         ))}
         <div className={workspace.navGroup}>
-          <p>Account</p>
+          <p>{merchantRole && lang !== "en" ? "Akun" : "Account"}</p>
           <button type="button" title={lang === "en" ? "Settings" : "Pengaturan"} aria-label={lang === "en" ? "Settings" : "Pengaturan"} onClick={openOrganizerSettings}>
             <Settings size={18} /><span>{lang === "en" ? "Settings" : "Pengaturan"}</span>
           </button>
@@ -1767,12 +1916,12 @@ export default function CivicLedgerApp() {
   return (
     <div
       suppressHydrationWarning
-      className={`min-h-screen flex bg-canvas text-ink-body ${organizer ? workspace.shell + " " + coordinatorSora.variable : ""}`}
-      data-compact={organizer && compactRail}
+      className={`min-h-screen flex bg-canvas text-ink-body ${workspaceShell ? workspace.shell + " " + coordinatorSora.variable : ""} ${merchantRole ? checkout.shell : ""}`}
+      data-compact={workspaceShell && compactRail}
     >
       {/* ==================== SIDEBAR KIRI (DESKTOP) ==================== */}
       <aside className="no-print hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-surface border-r border-line/70 z-30 select-none">
-        {organizer ? (
+        {workspaceShell ? (
           <div className={workspace.brandHeader}>
             <button
               className={workspace.brandMark}
@@ -1789,7 +1938,7 @@ export default function CivicLedgerApp() {
             ><span aria-hidden="true">C</span></button>
             <div className={workspace.brandCopy} aria-hidden={compactRail}>
               <div className={workspace.brandMask}><span>Civic<em>Ledger.</em></span></div>
-              <p>Community Workspace</p>
+              <p>{merchantRole ? (lang === "en" ? "Merchant Workspace" : "Ruang Kerja Kedai") : "Community Workspace"}</p>
             </div>
             <button
               className={workspace.brandCollapse}
@@ -1828,7 +1977,7 @@ export default function CivicLedgerApp() {
         )}
 
         {/* Profil Akun */}
-        {!organizer && <div className="p-3.5 border-b border-line/50 bg-nested/45">
+        {!workspaceShell && <div className="p-3.5 border-b border-line/50 bg-nested/45">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-cta-bg text-cta-ink flex items-center justify-center font-bold text-sm shrink-0">
               {currentUser.name.charAt(0).toUpperCase()}
@@ -1865,7 +2014,7 @@ export default function CivicLedgerApp() {
           </div>
         </div>}
 
-        {organizer ? organizerNavigation() : (
+        {workspaceShell ? organizerNavigation() : (
         <nav className="flex-1 py-4 space-y-5 overflow-y-auto px-2.5">
           {opsNav.length > 0 && (
             <div>
@@ -1948,7 +2097,7 @@ export default function CivicLedgerApp() {
         )}
 
         {/* Kontrol Bawah */}
-        <div className="p-3.5 border-t border-line/60 bg-surface space-y-2.5">
+        {!merchantRole && <div className="p-3.5 border-t border-line/60 bg-surface space-y-2.5">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 text-xs text-ink-secondary">
               <span className="font-medium">{organizer ? (lang === "en" ? "Simulation" : "Simulasi") : "Sinyal"}</span>
@@ -2134,11 +2283,33 @@ export default function CivicLedgerApp() {
               Reset Data Demo
             </button>
           )}
-        </div>
+        </div>}
       </aside>
 
       {/* ==================== AREA KONTEN UTAMA ==================== */}
-      <div className={`flex-1 lg:pl-64 flex flex-col min-w-0 ${organizer ? workspace.body : ""}`}>
+      <div className={`flex-1 lg:pl-64 flex flex-col min-w-0 ${workspaceShell ? workspace.body : ""} ${merchantRole ? checkout.body : ""}`}>
+        {merchantRole ? <header className="no-print sticky z-20 flex items-center justify-between px-4 py-2 gap-2">
+          <div className={checkout.topbarLead}>
+            <button className={workspace.mobileMenu} type="button" aria-label={lang === "en" ? "Open navigation" : "Buka navigasi"} onClick={() => mobileNavigation.current?.showModal()}><Menu size={20} /></button>
+            <span className={checkout.topbarTitle}>{lang === "en" ? "Merchant workspace" : "Ruang kerja kedai"}</span>
+            <span className="text-xs font-semibold" title={lang === "en" ? "Device connection" : "Koneksi perangkat"}>{deviceOnline ? "Online" : "Offline"}</span>
+            {demoMerchant && <span className={checkout.simulationBadge}>{offlineSimulation ? (lang === "en" ? "Offline simulation" : "Simulasi offline") : t.simBadge}</span>}
+          </div>
+          <div className={checkout.topbarActions}>
+            <button type="button" onClick={() => updateLang(lang === "id" ? "en" : "id")} aria-label={lang === "id" ? "Switch to English" : "Ganti ke Bahasa Indonesia"}>{lang === "id" ? "EN" : "ID"}</button>
+            <details ref={organizerSettings} className={workspace.profile}>
+              <summary aria-label={lang === "en" ? "Account and settings" : "Akun dan pengaturan"}><span className={workspace.avatar}>{currentUser.name.charAt(0)}</span><strong>{activeMerchant?.name ?? currentUser.name}</strong></summary>
+              <div onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
+                <strong>{currentUser.name}</strong>
+                <small>{engineShortText} · {realtimeConnected ? (lang === "en" ? "Live updates connected" : "Pembaruan langsung terhubung") : (lang === "en" ? "Live updates disconnected" : "Pembaruan langsung terputus")}</small>
+                <button type="button" onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? t.dayMode : t.nightMode}</button>
+                <button type="button" onClick={() => updateLargeText(!largeText)}>{largeText ? t.largeTextOn : t.largeTextOff}</button>
+                <button type="button" onClick={openPassword}>{lang === "en" ? "Change password" : "Ganti kata sandi"}</button>
+                <button type="button" onClick={handleLogout}>{lang === "en" ? "Sign out" : "Keluar"}</button>
+              </div>
+            </details>
+          </div>
+        </header> : (
         <header className="no-print sticky top-0 z-20 h-16 bg-surface/92 backdrop-blur-md border-b border-line/60 px-4 sm:px-6 flex items-center justify-between gap-3">
           {organizer ? <>
             <button className={workspace.mobileMenu} type="button" aria-label={lang === "en" ? "Open navigation" : "Buka navigasi"} onClick={() => mobileNavigation.current?.showModal()}><Menu size={20} /></button>
@@ -2256,14 +2427,14 @@ export default function CivicLedgerApp() {
               </div>
             </details>}
           </div>
-        </header>
-        {organizer && <dialog ref={mobileNavigation} className={workspace.dialog} aria-labelledby="rail-title">
+        </header>)}
+        {workspaceShell && <dialog ref={mobileNavigation} className={workspace.dialog} aria-labelledby="rail-title">
           <header className={workspace.dialogHead}><h2 id="rail-title">CivicLedger</h2><button type="button" onClick={() => mobileNavigation.current?.close()} aria-label={lang === "en" ? "Close" : "Tutup"}><CloseMenu size={18} /></button></header>
           {organizerNavigation()}
         </dialog>}
 
         {/* Tab Mobile */}
-        <div className={organizer ? "hidden" : "no-print lg:hidden border-b border-line/60 bg-surface px-4 py-2.5 flex items-center gap-1.5 overflow-x-auto"}>
+        <div className={workspaceShell ? "hidden" : "no-print lg:hidden border-b border-line/60 bg-surface px-4 py-2.5 flex items-center gap-1.5 overflow-x-auto"}>
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
@@ -2286,7 +2457,7 @@ export default function CivicLedgerApp() {
         </div>
 
         {/* Banner Offline */}
-        {isOfflineMode && (
+        {isOfflineMode && !merchantRole && (
           <div className="no-print bg-amberTech/12 border-b border-amberTech/35 px-4 sm:px-6 py-3">
             <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[13.5px] text-amberTech">
               <div className="flex items-center gap-2">
@@ -2449,7 +2620,63 @@ export default function CivicLedgerApp() {
                 )}
 
                 {/* TAB 3: KASIR KEDAI & SCAN QR */}
-                {activeTab === "MERCHANT_POS" && (
+                {activeTab === "MERCHANT_POS" && merchantRole && <MerchantWorkspace
+                  en={lang === "en"}
+                  merchant={activeMerchant}
+                  online={deviceOnline}
+                  offlineMode={offlineSimulation || !deviceOnline}
+                  demo={demoMerchant}
+                  simulation={offlineSimulation}
+                  onToggleSimulation={() => {
+                    const next = !offlineSimulation;
+                    setOfflineSimulation(next);
+                    setIsOfflineMode(next || !deviceOnline);
+                  }}
+                  demoVouchers={demoVouchers}
+                  code={scannerInputCode}
+                  onCode={(code, raw = "") => {
+                    setScannerInputCode(code);
+                    setScannedQRPayloadRaw(raw);
+                  }}
+                  codeFormatValid={isCodeFormatValid}
+                  cameraActive={cameraActive}
+                  cameraPending={cameraPending}
+                  cameraError={cameraError}
+                  videoRef={videoRef}
+                  onToggleCamera={toggleCamera}
+                  onStopCamera={stopCamera}
+                  onUpload={handleUploadQrFile}
+                  uploadPending={uploadPending}
+                  uploadError={uploadError}
+                  verifying={verifying}
+                  verificationError={verificationError}
+                  trace={cryptoTrace}
+                  expiresAt={verifiedExpiry}
+                  recipientName={recipientName}
+                  syncError={cryptoTrace ? reconciliationLogs.find((log) => log.client_tx_id === cryptoTrace.clientTxId && log.merchant_id === merchantId && log.outcome !== "SYNCED")?.reason : undefined}
+                  onVerify={handleVerifyAndRedeem}
+                  onClear={() => {
+                    setScannerInputCode("");
+                    setScannedQRPayloadRaw("");
+                    setVerificationError("");
+                    setCryptoTrace(null);
+                  }}
+                  queue={merchantQueue}
+                  syncing={isSyncingBatch}
+                  onSync={handleSyncOfflineBatch}
+                  syncResults={(lastSyncResults ?? []).filter((result) => merchantSyncIds.includes(result.client_tx_id))}
+                  transactions={merchantLedger}
+                  rejectedCount={merchantRejections}
+                  onDuplicateTest={() => {
+                    if (!demoMerchant || !activeMerchant) return;
+                    const redeemedDemoVouchers = demoVouchers.filter((voucher) => merchantLedger.some((entry) => entry.voucher_id === voucher.id));
+                    void handleSimulateOfflineConflict({ merchant: activeMerchant, vouchers: redeemedDemoVouchers }).catch((error: unknown) => {
+                      showToast("error", error instanceof Error ? error.message : "Simulasi gagal");
+                    });
+                  }}
+                  onHistory={() => { setActiveTab("CLEARINGHOUSE"); window.scrollTo(0, 0); }}
+                />}
+                {activeTab === "MERCHANT_POS" && !merchantRole && (
                   <MerchantPosTab
                     lang={lang}
                     currentUser={currentUser}
@@ -2479,7 +2706,7 @@ export default function CivicLedgerApp() {
                     onToggleCamera={toggleCamera}
                     onUploadQrFile={handleUploadQrFile}
                     onVerifyAndRedeem={handleVerifyAndRedeem}
-                    onSimulateOfflineConflict={handleSimulateOfflineConflict}
+                    onSimulateOfflineConflict={() => void handleSimulateOfflineConflict()}
                     onSyncOfflineBatch={handleSyncOfflineBatch}
                   />
                 )}
@@ -2490,12 +2717,12 @@ export default function CivicLedgerApp() {
                     lang={lang}
                     currentUser={currentUser}
                     poolTotalIdr={poolTotalIdr}
-                    totalUnsettledIdr={totalUnsettledIdr}
-                    totalSettledBatchesIdr={totalSettledBatchesIdr}
-                    merchants={merchants}
-                    ledger={ledger}
-                    reconciliationLogs={reconciliationLogs}
-                    settlementBatches={settlementBatches}
+                    totalUnsettledIdr={merchantRole ? (activeMerchant?.unsettled_balance_idr ?? 0) : totalUnsettledIdr}
+                    totalSettledBatchesIdr={merchantRole ? (activeMerchant?.total_settled_idr ?? 0) : totalSettledBatchesIdr}
+                    merchants={merchantRole ? (activeMerchant ? [{ ...activeMerchant, bank_account: maskSettlementAccount(activeMerchant.bank_account) }] : []) : merchants}
+                    ledger={merchantRole ? merchantLedger : ledger}
+                    reconciliationLogs={merchantRole ? reconciliationLogs.filter((log) => log.merchant_id === merchantId) : reconciliationLogs}
+                    settlementBatches={merchantRole ? settlementBatches.filter((batch) => batch.merchant_id === merchantId).map((batch) => ({ ...batch, bank_account: maskSettlementAccount(batch.bank_account) })) : settlementBatches}
                     showFullHashes={showFullHashes}
                     setShowFullHashes={setShowFullHashes}
                     isVerifyingChain={isVerifyingChain}
