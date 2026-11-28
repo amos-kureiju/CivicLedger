@@ -4,7 +4,7 @@
   min-height: 100dvh;
   font-family: var(--font-inter), sans-serif;
 }
-.portal :is(h1, h2) { font-family: var(--font-coordinator-sora), var(--font-inter), sans-serif; font-weight: 600; line-height: 1.2; }
+.portal :is(h1, h2) { font-family: var(--font-citizen-jakarta), var(--font-inter), sans-serif; font-weight: 600; line-height: 1.2; }
 .portal h2 { font-size: 1.33rem; }
 .portal :is(button, [tabindex]):focus-visible { outline: 3px solid var(--citizen-focus); outline-offset: 3px; }
 .portal :is(aside, .welcome) button:focus-visible { outline-color: #a9d9f7; }
@@ -14,11 +14,11 @@
 :global(html.dark) .portal { --citizen-focus: #a9d9f7; }
 .portal.portal .body { max-width: 1240px; }
 .portal.portal .topbar { display: flex; justify-content: space-between; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding-inline: 12px; }
-.topLead, .controls, .connection, .sectionHeading, .location, .notice, .ticketHeader, .badge, .actions, .codeRow {
+.topLead, .controls, .connection, .sectionHeading, .notice, .ticketHeader, .badge, .actions, .codeRow {
   display: flex; align-items: center; gap: 8px;
 }
 .topLead { flex-wrap: wrap; }
-.topLead strong { font-family: var(--font-coordinator-sora), var(--font-inter), sans-serif; }
+.topLead strong { font-family: var(--font-citizen-jakarta), var(--font-inter), sans-serif; }
 .topLead > button, .controls button, .button {
   min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 6px 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: rgb(var(--bg-card)); font-weight: 600; font-size: .92rem;
@@ -33,7 +33,7 @@
 .simulation { margin-inline-end: auto; color: #87460a; }
 :global(html.dark) .simulation { color: #ffcb78; }
 
-.content { display: grid; gap: 12px; min-width: 0; color: rgb(var(--ink-primary)); }
+.content { display: grid; gap: 16px; min-width: 0; color: rgb(var(--ink-primary)); }
 .welcome {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .78fr); align-items: stretch;
   min-height: 150px; border-radius: 8px; background: #a9d9f7; color: #202b39; overflow: hidden;
@@ -41,35 +41,13 @@
 .welcome > div { align-self: center; padding: 16px 20px; animation: reveal 260ms var(--citizen-motion) both; }
 .welcome h1 { margin-block: 3px 5px; font-size: clamp(1.65rem, 3vw, 2rem); overflow-wrap: anywhere; }
 .eyebrow { text-transform: uppercase; letter-spacing: .075em; font-size: .82rem; font-weight: 700; }
-.location { margin-top: 5px; font-size: .88rem; }
-.location svg { flex: none; }
 .welcome img { width: 100%; height: 100%; max-height: 180px; object-fit: cover; object-position: center 57%; animation: photo-in 270ms var(--citizen-motion) both; }
-.aid { display: grid; grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); padding: 9px 16px; }
-.aid, .wallet { background: rgb(var(--bg-card)); border-radius: 8px; border: 1px solid var(--line-soft); }
-.aid > div { padding-inline: 12px; min-width: 0; }
-.aid > div:first-child { padding-inline-start: 0; border-inline-end: 1px solid var(--line-soft); }
-.aid dt { color: rgb(var(--ink-secondary)); font-size: .9rem; }
-.aid dd { font-size: clamp(1.32rem, 2.25vw, 1.75rem); font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .notice { border-inline-start: 3px solid #c58135; border-radius: 6px; padding: 8px 12px; background: rgb(var(--bg-card)); }
 .notice svg { flex: none; }
 .notice[data-tone="success"] { border-inline-start-color: #168357; }
 .notice[data-tone="success"] svg { color: #176846; }
 :global(html.dark) .notice[data-tone="success"] svg { color: #7ce5b7; }
-.wallet, .guide { scroll-margin-top: 84px; min-width: 0; }
 .sectionHeading { justify-content: space-between; }
-.wallet > .sectionHeading { padding: 6px 12px; }
-.tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); position: relative; isolation: isolate; border-block: 1px solid var(--line-soft); }
-.tabs[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.tabs button { min-height: 44px; padding: 5px; font-weight: 600; overflow-wrap: anywhere; transition: color 230ms var(--citizen-motion), background-color 230ms var(--citizen-motion); }
-.tabs button[aria-selected="true"] { color: #202b39; background: #d8efff; }
-.tabs button:not([aria-selected="true"]):hover { background: rgb(var(--bg-nested)); }
-.underline { position: absolute; inset: auto auto -1px 0; min-height: 3px; width: 50%; background: #f04438; transition: transform 260ms var(--citizen-motion); pointer-events: none; }
-.voucherContent { padding: 12px; min-width: 0; }
-.mobileChoice { display: none; }
-.choices { display: flex; gap: 8px; padding-bottom: 10px; overflow-x: auto; }
-.choices button { flex: 0 0 auto; text-align: start; }
-.choices button[aria-pressed="true"] { background: #d8efff; border-color: #5895b9; color: #202b39; }
-.choices span { font-weight: 400; }
 .voucher { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: 12px; align-items: stretch; }
 .portal .ticketFace {
   --ticket-background: #c92e25;
@@ -84,7 +62,7 @@
 .badge svg { flex: none; }
 .usedCheck { color: #176846; animation: check-in 230ms var(--citizen-motion) both; }
 :global(html.dark) .instructions .usedCheck { color: #7ce5b7; }
-.amount { display: block; font-family: var(--font-coordinator-sora), var(--font-inter), sans-serif; font-size: clamp(2rem, 4vw, 2.5rem); line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.amount { display: block; font-family: var(--font-citizen-jakarta), var(--font-inter), sans-serif; font-size: clamp(2rem, 4vw, 2.5rem); line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .ticketDetails { position: relative; border-top: 1px dashed #ffffffad; margin-top: 8px; padding-top: 8px; font-size: .94rem; overflow-wrap: anywhere; }
 .ticketDetails::before, .ticketDetails::after { content: ""; position: absolute; top: -8px; width: 14px; height: 14px; border-radius: 50%; background: rgb(var(--bg-card)); }
 .ticketDetails::before { inset-inline-start: -23px; }
@@ -98,14 +76,8 @@
 .codeRow code { font-size: clamp(1.16rem, 2.2vw, 1.6rem); font-weight: 700; }
 .actions { flex-wrap: wrap; }
 .feedback { color: rgb(var(--ink-secondary)); font-size: .92rem; }
-.wallet > .feedback { margin: 6px 12px; }
-.history, .empty { display: grid; align-content: center; gap: 7px; padding: 12px; }
-.guide { display: grid; gap: 8px; padding: 3px 2px 8px; }
-.guide ol { display: flex; flex-wrap: wrap; gap: 8px 24px; }
-.guide li { display: flex; align-items: center; gap: 8px; }
-.guide li svg { flex: none; color: #286991; }
+.history { display: grid; align-content: center; gap: 7px; padding: 12px; }
 :global(html.dark) .guide li svg { color: #a9d9f7; }
-.guide p { color: rgb(var(--ink-secondary)); }
 
 .portal.portal > aside nav button, .sidebarFooter button { font-size: .93rem; }
 .sidebarFooter button { min-height: 44px; }
@@ -133,14 +105,6 @@
   .controls { grid-column: 1; grid-row: 2; }
   .simulation { grid-column: 2; grid-row: 2; justify-self: end; margin-inline-end: 0; }
   .welcome > div { padding: 12px 14px; }
-  .tabs[data-count="3"] { grid-template-columns: minmax(0, .29fr) minmax(0, .30fr) minmax(0, .41fr); }
-  .tabs[data-count="3"] button { padding-inline: 3px; }
-  .tabs[data-count="3"] button span { display: block; }
-  .choices { display: none; }
-  .mobileChoice { display: grid; gap: 4px; margin-bottom: 10px; font-weight: 600; }
-  .mobileChoice select { width: 100%; min-width: 0; min-height: 44px; padding: 5px 8px; border: 1px solid var(--line-soft); border-radius: 7px; background: rgb(var(--bg-card)); font-weight: 400; }
-  .mobileChoice select:focus-visible { outline: 3px solid var(--citizen-focus); outline-offset: 3px; }
-  .guide, .wallet { scroll-margin-top: 126px; }
   .welcome { grid-template-columns: minmax(0, 1fr); }
   .welcome img { height: 88px; object-position: center 67%; }
   .voucher { grid-template-columns: minmax(0, 1fr); }
@@ -151,15 +115,13 @@
 }
 @media (max-width: 355px) {
   .simulation { grid-row: 3; grid-column: 1 / -1; justify-self: start; }
-  .tabs[data-count="3"] { grid-template-columns: minmax(0, .26fr) minmax(0, .25fr) minmax(0, .49fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .portal *, .portal *::before, .portal *::after { animation: none !important; transition: none !important; }
 }
 @media print {
   .portal.portal { display: block; padding: 0; background: white; }
-  .portal.portal .body > main, .voucherContent { padding: 0; }
-  .wallet { border: 0; }
+  .portal.portal .body > main { padding: 0; }
   .voucher { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); break-inside: avoid; }
   .portal .voucher[data-status] .ticketFace { color: #202b39; background: white; border: 1px solid #202b39; animation: none; }
   .ticketDetails { border-top-color: #202b39; }
@@ -206,18 +168,6 @@
 .amount { font-size: clamp(2.15rem, 4vw, 2.75rem); }
 .portal .ticketFace { --ticket-background: var(--citizen-red); }
 .portal .voucher[data-status="used"] .ticketFace { --ticket-background: var(--citizen-navy); }
-.aid { grid-template-columns: minmax(0, .85fr) minmax(0, .85fr) minmax(0, 1.3fr); }
-.aid > div:first-child { border-inline-end: 0; }
-.aid > div + div { border-inline-start: 1px solid var(--line-soft); }
-.emptyWallet { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 12px 3px; }
-.emptyWallet > div { flex: 1 1 14rem; }
-.emptyWallet strong { display: block; font-size: 1.1rem; }
-.emptyWallet p { color: rgb(var(--ink-secondary)); }
-.emptyIcon, .guide li > span { display: grid; place-items: center; flex: none; background: var(--citizen-ice); color: var(--citizen-ink); font-weight: 700; }
-.emptyIcon { width: 48px; height: 48px; border-radius: 8px; }
-.guide { padding: 10px 0; border-top: 1px solid var(--line-soft); }
-.guide .sectionHeading { flex-wrap: wrap; }
-.guide li > span { width: 30px; height: 30px; border-radius: 7px; }
 .primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 11px; border-radius: 7px; background: var(--citizen-ink); color: white; font-size: .92rem; font-weight: 650; transition: background-color 180ms var(--citizen-motion), transform 180ms var(--citizen-motion); }
 .primary:hover { background: var(--citizen-navy); }
 .primary:disabled { opacity: .55; }
@@ -230,9 +180,6 @@
 .qrPresentation img { display: block; background: white; width: min(100%, 20rem); height: auto; }
 .qrPresentation code { font-weight: 700; font-size: 1.15rem; }
 @media (max-width: 650px) {
-  .aid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 9px; }
-  .aid > div:last-child { grid-column: 1 / -1; padding: 7px 0 0; border-inline-start: 0; border-block-start: 1px solid var(--line-soft); }
-  .emptyWallet > .button { width: 100%; }
 }
 @media print {
   .page { animation: none; }
@@ -241,20 +188,17 @@
 
 :global(html[data-citizen-transition]) .page { view-transition-name: citizen-page; animation: none; }
 .portal.portal { transition: background-color 230ms var(--citizen-motion), grid-template-columns 300ms var(--citizen-motion); }
-.portal :is(.aid, .wallet, .topbar) { transition: background-color 230ms var(--citizen-motion), border-color 230ms var(--citizen-motion); }
+.portal .topbar { transition: background-color 230ms var(--citizen-motion), border-color 230ms var(--citizen-motion); }
 
-.tabs { --ready-width: 50%; --used-width: 50%; --expired-width: 0%; }
-.tabs[data-count="3"] { --ready-width: 33.333%; --used-width: 33.333%; --expired-width: 33.334%; }
-.tabs .underline { width: var(--ready-width); background: var(--citizen-poppy); transition: inset-inline-start 260ms var(--citizen-motion), width 260ms var(--citizen-motion); }
-.tabs[data-selected="used"] .underline { inset-inline-start: var(--ready-width); width: var(--used-width); }
-.tabs[data-selected="expired"] .underline { inset-inline-start: calc(var(--ready-width) + var(--used-width)); width: var(--expired-width); }
 @media (max-width: 650px) {
-  .tabs[data-count="3"] { --ready-width: 29%; --used-width: 30%; --expired-width: 41%; }
 }
 @media (max-width: 355px) {
-  .tabs[data-count="3"] { --ready-width: 26%; --used-width: 25%; --expired-width: 49%; }
 }
 @media (prefers-reduced-motion: reduce) { .portal.portal { transition: none; } }
 
 .activeRail[data-footer="true"] { --corner-cutout: 8px; }
 .portal > aside .sidebarFooter button:last-child { position: relative; z-index: 1; margin-top: 5px; }
+
+.portal.portal[data-wallet="true"] .body { justify-self: start; max-width: 1680px; }
+.portal.portal[data-wallet="true"] .body > main { padding-top: 17px; }
+@media (max-width: 670px) { .content { gap: 12px; } }

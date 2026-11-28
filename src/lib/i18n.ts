@@ -641,3 +641,32 @@ export const CITIZEN_EXPERIENCE_COPY = {
     "restriction": "Vouchers cannot be exchanged for cash."
   }
 };
+
+export const CITIZEN_WALLET_COPY = {
+  "id": {
+    "welcome": "Selamat datang kembali",
+    "balance": "Bantuan tersedia",
+    "active": "Kupon Aktif",
+    "latest": "Bantuan Terakhir",
+    "assistance": "Bantuan Sembako",
+    "noHistory": "Riwayat bantuan Anda akan muncul di sini.",
+    "detail": "Lihat Detail",
+    "close": "Tutup detail",
+    "stepStore": "Datang ke kedai",
+    "stepShow": "Tunjukkan kupon",
+    "stepTake": "Ambil sembako"
+  },
+  "en": {
+    "welcome": "Welcome back",
+    "balance": "Available aid",
+    "active": "Active Voucher",
+    "latest": "Latest Aid",
+    "assistance": "Grocery Aid",
+    "noHistory": "Your aid history will appear here.",
+    "detail": "View Details",
+    "close": "Close details",
+    "stepStore": "Visit a store",
+    "stepShow": "Show your voucher",
+    "stepTake": "Collect your groceries"
+  }
+};

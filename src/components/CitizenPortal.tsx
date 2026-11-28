@@ -2,9 +2,9 @@
 
 import { flushSync } from "react-dom";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { BookOpen, Check, CircleAlert, Clock3, Copy, LogOut, MapPin, Menu, Moon, PanelLeftClose, Printer, RefreshCw, ScanLine, Settings, ShoppingBasket, Store, Sun, Ticket, UserRound, X } from "lucide-react";
+import { BookOpen, Check, ChevronRight, CircleAlert, Clock3, Copy, LogOut, Menu, Moon, PanelLeftClose, Printer, RefreshCw, ScanLine, Settings, ShoppingBasket, Store, Sun, Ticket, UserRound, X } from "lucide-react";
 import type { AuthUser, Beneficiary, Voucher } from "@/lib/types";
-import { CITIZEN_COPY, CITIZEN_EXPERIENCE_COPY, UI_COPY, type AppLang } from "@/lib/i18n";
+import { CITIZEN_COPY, CITIZEN_EXPERIENCE_COPY, CITIZEN_WALLET_COPY, UI_COPY, type AppLang } from "@/lib/i18n";
 import { formatDateTime, formatRupiah } from "@/lib/formatters";
 import { encodeVoucherToQRPayload } from "@/lib/crypto";
 import workspace from "./CoordinatorWorkspace.module.css";
@@ -14,6 +14,8 @@ import styles from "./CitizenPortal.module.css";
 import CitizenUsageGuide from "./CitizenUsageGuide";
 import CitizenProfilePage from "./CitizenProfilePage";
 import CitizenSettingsPage from "./CitizenSettingsPage";
+import CitizenWalletOverview from "./CitizenWalletOverview";
+import wallet from "./CitizenWallet.module.css";
 
 type VoucherGroup = "ready" | "used" | "expired";
 type View = "my" | "guide" | "profile" | "settings";
@@ -79,12 +81,15 @@ export default function CitizenPortal(p: Props) {
   const c = CITIZEN_COPY[p.lang];
   const common = UI_COPY[p.lang];
   const t = CITIZEN_EXPERIENCE_COPY[p.lang];
+  const w = CITIZEN_WALLET_COPY[p.lang];
   const id = useId();
   const now = useExpiryClock(p.vouchers);
   const [tab, setTab] = useState<VoucherGroup>("ready");
   const [lastSelected, setLastSelected] = useState<Partial<Record<VoucherGroup, string>>>({});
   const [view, setView] = useState<View>("my");
   const [drawer, setDrawer] = useState<Drawer>("navigation");
+  const [presentedId, setPresentedId] = useState<string>();
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -98,13 +103,15 @@ export default function CitizenPortal(p: Props) {
   const main = useRef<HTMLElement>(null);
   const pageTransition = useRef<ViewTransition | null>(null);
   const navigationRevision = useRef(0);
-  const voucherContent = useRef<HTMLDivElement>(null);
-  const previousHeight = useRef<number | null>(null);
+  const detail = useRef<HTMLElement>(null);
+  const detailTrigger = useRef<HTMLButtonElement>(null);
   const voucherGroups: Record<VoucherGroup, Voucher[]> = { ready: [], used: [], expired: [] };
   for (const item of p.vouchers) voucherGroups[classify(item, now)].push(item);
   const visibleGroups = voucherGroups.expired.length || tab === "expired" ? groups : groups.slice(0, 2);
   const items = voucherGroups[tab];
   const voucher = items.find((item) => item.id === lastSelected[tab]) ?? items[0];
+  const featuredActive = voucherGroups.ready.find((item) => item.id === lastSelected.ready) ?? voucherGroups.ready[0];
+  const featuredCompleted = [...voucherGroups.used].sort((a, b) => (Date.parse(b.redeemed_at ?? "") || 0) - (Date.parse(a.redeemed_at ?? "") || 0))[0];
   const qr = voucher && tab === "ready" && p.qr?.payload === encodeVoucherToQRPayload(voucher) ? p.qr.url : "";
   const aid = voucherGroups.ready.reduce((sum, item) => sum + item.nominal_idr, 0);
   const activeFeedback = feedback?.id === voucher?.id ? feedback : null;
@@ -122,21 +129,10 @@ export default function CitizenPortal(p: Props) {
     return () => window.clearTimeout(timer);
   }, [feedback]);
 
-  useEffect(() => {
-    const element = voucherContent.current;
-    const from = previousHeight.current;
-    previousHeight.current = null;
-    if (!element || from === null || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const to = element.getBoundingClientRect().height;
-    if (Math.abs(from - to) < 2) return;
-    const animation = element.animate([{ height: from + "px" }, { height: to + "px" }], { duration: 250, easing: "cubic-bezier(.22, 1, .36, 1)" });
-    return () => animation.cancel();
-  }, [tab, voucher?.id]);
-
-  function openDrawer(next: Drawer, origin: HTMLElement) {
+  function openDrawer(next: Drawer, origin: HTMLElement, voucherId?: string) {
     if (!dialog.current?.open) openFrom.current = origin;
     suppressRestore.current = false;
-    flushSync(() => setDrawer(next));
+    flushSync(() => { setDrawer(next); setPresentedId(voucherId); });
     if (!dialog.current?.open) dialog.current?.showModal();
     else dialog.current.querySelector<HTMLButtonElement>("[data-close]")?.focus();
   }
@@ -162,8 +158,8 @@ export default function CitizenPortal(p: Props) {
   }, [view]);
 
   useEffect(() => {
-    if (drawer === "qr" && dialog.current?.open && (!voucher || tab !== "ready")) dialog.current.close();
-  }, [drawer, voucher, tab]);
+    if (drawer === "qr" && dialog.current?.open && (voucher?.id !== presentedId || tab !== "ready")) dialog.current.close();
+  }, [drawer, voucher, tab, presentedId]);
 
   function navigate(next: View) {
     suppressRestore.current = Boolean(dialog.current?.open);
@@ -205,15 +201,39 @@ export default function CitizenPortal(p: Props) {
     requestAnimationFrame(() => brand.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus());
   }
 
-  function chooseVoucher(item: Voucher) {
-    previousHeight.current = voucherContent.current?.getBoundingClientRect().height ?? null;
+  function focusDetails() {
+    requestAnimationFrame(() => {
+      if (!detail.current) return;
+      detail.current.focus({ preventScroll: true });
+      detail.current.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    });
+  }
+
+  function chooseVoucher(item: Voucher, trigger: HTMLButtonElement) {
+    detailTrigger.current = trigger;
     setLastSelected((previous) => ({ ...previous, [tab]: item.id }));
+    setDetailId(item.id);
     if (tab === "ready") p.onSelect(item);
+    focusDetails();
+  }
+
+  function openFeatured(item: Voucher, ready: boolean, trigger: HTMLButtonElement) {
+    const group = ready ? "ready" : "used";
+    if (classify(item, Date.now()) !== group) return;
+    detailTrigger.current = trigger;
+    flushSync(() => {
+      setTab(group);
+      setLastSelected((previous) => ({ ...previous, [group]: item.id }));
+      setDetailId(item.id);
+      if (ready) p.onSelect(item);
+    });
+    if (ready) openDrawer("qr", trigger, item.id);
+    else focusDetails();
   }
 
   function changeTab(next: VoucherGroup) {
     if (next === tab) return;
-    previousHeight.current = voucherContent.current?.getBoundingClientRect().height ?? null;
+    setDetailId(null);
     setTab(next);
   }
 
@@ -272,7 +292,7 @@ export default function CitizenPortal(p: Props) {
     </footer>;
   }
 
-  return <div className={[workspace.shell, rail.shell, styles.portal, p.fontClass].join(" ")} data-compact={p.compact}>
+  return <div className={[workspace.shell, rail.shell, styles.portal, p.fontClass].join(" ")} data-compact={p.compact} data-wallet={view === "my"}>
     <aside ref={sidebar} className="no-print hidden lg:flex lg:flex-col" aria-label={c.portal}>
       <div ref={brand} className={workspace.brandHeader + " " + rail.sidebarBrand}>
         <button type="button" className={workspace.brandMark} disabled={!p.compact} aria-hidden={!p.compact} aria-expanded={!p.compact} aria-label={c.expand} onClick={toggleRail}><span aria-hidden="true">C</span></button>
@@ -305,48 +325,49 @@ export default function CitizenPortal(p: Props) {
         {view === "settings" ? <CitizenSettingsPage lang={p.lang} dark={p.dark} largeText={p.largeText} onTheme={p.onTheme} onTextSize={p.onTextSize} onLanguage={p.onLanguage} onPassword={p.onPassword} onLogout={(trigger) => openDrawer("logout", trigger)} /> : view === "guide" ? <CitizenUsageGuide lang={p.lang} onBack={() => navigate("my")} /> : view === "profile" ? <>
           <CitizenProfilePage lang={p.lang} user={p.user} recipient={p.recipient} onPassword={p.onPassword} />
         </> : <div className={styles.content}>
-          <section className={styles.welcome + " no-print"}>
-            <div><p className={styles.eyebrow}>{c.welcome}</p><h1 tabIndex={-1}>{c.hello}, {p.user.name}!</h1><p>{c.intro}</p>
-              {(p.recipient?.rt_rw || p.user.rt_rw) && <p className={styles.location}><MapPin size={17} aria-hidden="true" />{p.recipient?.rt_rw || p.user.rt_rw}</p>}
-            </div>
-            <img src="/images/dashboard/citizen-grocery-hero.webp" width={1040} height={585} alt="" />
-          </section>
-
-          <dl aria-busy={p.loading} className={styles.aid + " no-print"}>
-            <div><dt>{c.availableCount}</dt><dd>{p.loading ? "?" : voucherGroups.ready.length}</dd></div>
-            <div><dt>{c.used}</dt><dd>{p.loading ? "?" : voucherGroups.used.length}</dd></div>
-            <div><dt>{c.availableValue}</dt><dd>{p.loading ? "?" : formatRupiah(aid)}</dd></div>
-          </dl>
+          <CitizenWalletOverview lang={p.lang} name={p.user.name} location={p.recipient?.rt_rw || p.user.rt_rw}
+            amount={aid} available={voucherGroups.ready.length} used={voucherGroups.used.length} loading={p.loading}
+            active={featuredActive} completed={featuredCompleted} onOpen={openFeatured} />
           {(!p.online || p.cached) && <p role="status" className={styles.notice + " no-print"}><CircleAlert size={18} aria-hidden="true" />{p.online ? c.cached : c.offline}</p>}
 
-          <section aria-labelledby={id + "-vouchers"} className={styles.wallet}>
-            <div className={styles.sectionHeading + " no-print"}>
+          <section aria-labelledby={id + "-vouchers"} className={wallet.history}>
+            <div className={wallet.historyHeader + " no-print"}>
               <h2 id={id + "-vouchers"}>{c.my}</h2>
               <button className={styles.button} type="button" aria-label={c.refresh} title={c.refresh} disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}><RefreshCw size={19} aria-hidden="true" /></button>
             </div>
             {(refreshing || refreshFailed) && <p className={styles.feedback + " no-print"} role="status">{refreshing ? c.refreshing : c.refreshFailed}</p>}
-            <div className={styles.tabs + " no-print"} role="tablist" aria-label={c.my} data-count={visibleGroups.length} data-selected={tab}>
+            <div className={wallet.tabs + " no-print"} role="tablist" aria-label={c.my} data-count={visibleGroups.length} data-selected={tab}>
               {visibleGroups.map((group, index) => <button type="button" id={id + "-" + group} key={group} role="tab" aria-selected={tab === group} aria-controls={id + "-panel"} tabIndex={tab === group ? 0 : -1}
                 onClick={() => changeTab(group)} onKeyDown={(event) => tabKeys(event, index)}>{c[group]} <span>({voucherGroups[group].length})</span></button>)}
-              <i className={styles.underline} aria-hidden="true" />
+              <i className={wallet.underline} aria-hidden="true" />
             </div>
-            <div ref={voucherContent} className={styles.voucherContent} id={id + "-panel"} role="tabpanel" aria-labelledby={id + "-" + tab} tabIndex={0}>
-              {items.length > 1 && <>
-                <div className={styles.choices + " no-print"}>
-                  {items.map((item) => <button key={item.id} type="button" className={styles.button} aria-pressed={voucher?.id === item.id} onClick={() => chooseVoucher(item)}>
-                    <code>{item.short_code}</code><span>{item.commodity_name}</span>
-                  </button>)}
+            <div id={id + "-panel"} role="tabpanel" aria-labelledby={id + "-" + tab} tabIndex={0}>
+              {items.length ? <ul className={wallet.rows + " no-print"}>
+                {items.map((item) => {
+                  const time = tab === "used" ? item.redeemed_at : item.expires_at;
+                  return <li key={item.id}><button type="button" className={wallet.row} aria-expanded={detailId === item.id}
+                    aria-controls={detailId === item.id ? id + "-detail" : undefined} onClick={(event) => chooseVoucher(item, event.currentTarget)}>
+                    <span className={wallet.rowIcon}><Ticket size={20} aria-hidden="true" /></span>
+                    <span className={wallet.rowBody}>
+                      <strong>{item.commodity_name}</strong>
+                      <span className={wallet.meta}><code>{item.short_code}</code>{time && <time dateTime={time}>{formatDateTime(time)}</time>}</span>
+                    </span>
+                    <span className={wallet.rowEnd}><strong>{formatRupiah(item.nominal_idr)}</strong><small>{c[tab]}</small></span>
+                    <ChevronRight size={17} aria-hidden="true" />
+                  </button></li>;
+                })}
+              </ul> : <div className={wallet.empty + " no-print"}>
+                <span className={wallet.emptyIcon}><Ticket size={24} aria-hidden="true" /></span>
+                <div role="status"><strong>{p.loading ? c.loading : tab === "ready" ? t.noVouchers : c.empty}</strong>
+                  {!p.loading && tab === "ready" && <p>{t.newVouchers}</p>}
                 </div>
-                <label className={styles.mobileChoice + " no-print"}>{c.chooseVoucher}
-                  <select value={voucher?.id} onChange={(event) => {
-                    const item = items.find((option) => option.id === event.target.value);
-                    if (item) chooseVoucher(item);
-                  }}>
-                    {items.map((item) => <option key={item.id} value={item.id}>{item.short_code} / {item.commodity_name}</option>)}
-                  </select>
-                </label>
-              </>}
-              {voucher ? <article className={styles.voucher} data-status={tab}>
+                {!p.loading && tab === "ready" && voucherGroups.used.length > 0 && <button type="button" className={styles.button} onClick={() => { changeTab("used"); document.getElementById(id + "-used")?.focus(); }}>{t.voucherHistory}</button>}
+              </div>}
+              {voucher && voucher.id === detailId && <div className={wallet.details}>
+                <div className={wallet.detailHeader + " no-print"}><code>{voucher.short_code}</code>
+                  <button type="button" className={styles.button} onClick={() => { setDetailId(null); detailTrigger.current?.focus(); }}><X size={18} aria-hidden="true" />{w.close}</button>
+                </div>
+                <article ref={detail} id={id + "-detail"} tabIndex={-1} aria-label={voucher.commodity_name} className={styles.voucher} data-status={tab}>
                 <div key={voucher.id} className={ticket.feature + " " + styles.ticketFace}>
                   <div className={styles.ticketHeader}><span>CivicLedger</span><span className={styles.badge}>
                     {tab === "used" ? <Check className={styles.usedCheck} size={16} aria-hidden="true" /> : tab === "expired" ? <Clock3 size={16} aria-hidden="true" /> : <Ticket size={16} aria-hidden="true" />}{c[tab]}
@@ -367,7 +388,7 @@ export default function CitizenPortal(p: Props) {
                     </button></div>
                     {activeFeedback && <p role="status" className={styles.feedback + " no-print"}>{c[activeFeedback.message]}</p>}
                     <div className={styles.actions + " no-print"}>
-                      <button type="button" className={styles.primary} disabled={!qr} aria-haspopup="dialog" onClick={(event) => { if (classify(voucher, Date.now()) === "ready") openDrawer("qr", event.currentTarget); }}><ScanLine size={18} aria-hidden="true" />{t.showQr}</button>
+                      <button type="button" className={styles.primary} disabled={!qr} aria-haspopup="dialog" onClick={(event) => { if (classify(voucher, Date.now()) === "ready") openDrawer("qr", event.currentTarget, voucher.id); }}><ScanLine size={18} aria-hidden="true" />{t.showQr}</button>
                       <button type="button" className={styles.button} disabled={!qr} onClick={() => { if (classify(voucher, Date.now()) === "ready") window.print(); }}><Printer size={18} aria-hidden="true" />{c.print}</button>
                       <button type="button" className={styles.button} disabled={copying} onClick={() => void copy("sms")}><Copy size={18} aria-hidden="true" />{c.sms}</button>
                     </div>
@@ -378,20 +399,16 @@ export default function CitizenPortal(p: Props) {
                   {tab === "used" && voucher.redeemed_by_merchant_name && <p>{c.store} <strong>{voucher.redeemed_by_merchant_name}</strong></p>}
                   {tab === "used" && voucher.redeemed_at && <p>{c.usedAt} <time dateTime={voucher.redeemed_at}>{formatDateTime(voucher.redeemed_at)}</time></p>}
                 </div>}
-              </article> : !p.loading && tab === "ready" ? <div className={styles.emptyWallet}>
-                <span className={styles.emptyIcon}><Ticket size={29} aria-hidden="true" /></span>
-                <div role="status"><strong>{t.noVouchers}</strong><p>{t.newVouchers}</p></div>
-                <button type="button" className={styles.button} onClick={() => { changeTab("used"); document.getElementById(id + "-used")?.focus(); }}>{t.voucherHistory}</button>
-              </div> : <p className={styles.empty} role="status">{p.loading ? c.loading : c.empty}</p>}
+                </article>
+              </div>}
             </div>
           </section>
 
-          <section className={styles.guide + " no-print"} aria-labelledby={id + "-guide"}>
-            <div className={styles.sectionHeading}><h2 id={id + "-guide"}>{t.quickGuide}</h2><button type="button" className={styles.button} onClick={() => navigate("guide")}>{t.guideLink}</button></div>
-            <ol>{[c.stepStore, c.stepShow, c.stepTake].map((label, index) =>
-              <li key={label}><span aria-hidden="true">{index + 1}</span>{label}</li>)}</ol>
-            <p>{t.restriction}</p>
-            <p><strong>{c.help}</strong> {c.helpText}</p>
+          <section className={wallet.guide + " no-print"} aria-labelledby={id + "-guide"}>
+            <div className={wallet.guideHeader}><h2 id={id + "-guide"}>{t.quickGuide}</h2><button type="button" className={styles.button} onClick={() => navigate("guide")}>{t.guideLink}</button></div>
+            <ol>{[{ label: w.stepStore, Icon: Store }, { label: w.stepShow, Icon: ScanLine }, { label: w.stepTake, Icon: ShoppingBasket }].map(({ label, Icon }, index) =>
+              <li key={label}><span className={wallet.stepNo}>{String(index + 1).padStart(2, "0")}</span><Icon size={18} aria-hidden="true" />{label}</li>)}</ol>
+            <div className={wallet.guideFoot}><p>{t.restriction}</p><p><strong>{c.help}</strong> {c.helpText}</p></div>
           </section>
         </div>}
         </div>
@@ -410,7 +427,7 @@ export default function CitizenPortal(p: Props) {
           <button data-close type="button" className={styles.button} aria-label={c.close} onClick={() => dialog.current?.close()}><X size={21} aria-hidden="true" /></button>
         </div>
         {drawer === "navigation" && <>{navigation()}{footer()}</>}
-        {drawer === "qr" && voucher && tab === "ready" && <div className={styles.qrPresentation}>
+        {drawer === "qr" && voucher && tab === "ready" && voucher.id === presentedId && <div className={styles.qrPresentation}>
           {qr ? <img src={qr} alt={c.qr} width={480} height={480} /> : <p role="status">{c.qrWait}</p>}
           <p>{c.code} <code>{voucher.short_code}</code></p>
         </div>}

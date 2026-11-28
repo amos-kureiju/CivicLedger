@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import QRCode from "qrcode";
 import { Sora } from "next/font/google";
+import localFont from "next/font/local";
 import jsQR from "jsqr";
 import {
   LayoutGrid,
@@ -97,6 +98,7 @@ function hasRecordedCalendarCache() {
 }
 
 const coordinatorSora = Sora({ subsets: ["latin"], variable: "--font-coordinator-sora", display: "swap" });
+const citizenJakarta = localFont({ src: "./fonts/PlusJakartaSans.ttf", weight: "400 800", variable: "--font-citizen-jakarta", display: "swap", preload: false });
 
 const PASSWORD_CHANGED_MESSAGE = "Kata sandi berhasil diganti.";
 
@@ -1961,7 +1963,7 @@ export default function CivicLedgerApp() {
   const citizenPortal = currentUser.role === "BENEFICIARY" ? (
     <CitizenPortal
       key={currentUser.id}
-      fontClass={coordinatorSora.variable}
+      fontClass={citizenJakarta.variable}
       lang={lang}
       user={currentUser}
       recipient={currentWalletBeneficiary}
