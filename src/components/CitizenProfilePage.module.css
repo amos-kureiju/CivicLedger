@@ -1,0 +1,57 @@
+.profile { display: grid; min-width: 0; gap: 10px; color: rgb(var(--ink-primary)); --profile-motion: cubic-bezier(.22, 1, .36, 1); }
+.heading { animation: reveal 240ms var(--profile-motion) both; }
+.heading h1 { font-size: clamp(1.75rem, 3vw, 2rem); }
+.heading h1 span { color: #c92e25; }
+.heading p, .help, .note { color: rgb(var(--ink-secondary)); }
+:global(html.dark) .heading h1 span { color: #ffaaa3; }
+.identity { display: flex; align-items: center; gap: 16px; min-height: 144px; padding: 16px 20px; border-radius: 8px; background: #202b39; color: #fff; }
+.avatar { display: grid; place-items: center; width: 72px; height: 72px; flex: none; border-radius: 50%; background: #a9d9f7; color: #202b39; font-size: 1.38rem; font-weight: 700; animation: reveal 260ms var(--profile-motion) both; }
+.identityText { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; animation: reveal 270ms var(--profile-motion) both; }
+.identity .identityText h2 { font-size: clamp(1.45rem, 2.5vw, 1.75rem); }
+.role { color: #a9d9f7; font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.location { display: flex; gap: 6px; align-items: center; color: #d8efff; }
+.location svg { flex: none; }
+.art { position: relative; display: flex; align-items: center; gap: 12px; width: 148px; height: 86px; flex: none; margin-inline: auto 14px; padding: 12px; border-radius: 8px; background: #a9d9f7; color: #202b39; animation: art-in 280ms var(--profile-motion) both; }
+.artAvatar { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 50%; background: #d8efff; }
+.artLines { display: grid; gap: 6px; }
+.artLines i { display: block; height: 4px; width: 44px; background: #376582; border-radius: 4px; }
+.artLines i:nth-child(2) { width: 33px; }
+.artLines i:nth-child(3) { width: 24px; }
+.artMark { position: absolute; inset: 6px 7px auto auto; background: #c92e25; color: white; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; font-weight: 700; font-size: .75rem; }
+.info { border: 1px solid var(--line-soft); border-radius: 8px; background: rgb(var(--bg-card)); }
+.info > section { padding: 9px 16px; animation: reveal 250ms var(--profile-motion) both; }
+.info > section + section { border-top: 1px solid var(--line-soft); animation-delay: 50ms; }
+.profile .info h2 { font-size: 1.2rem; margin-bottom: 8px; }
+.personal { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 16px; }
+.personal dt { font-size: .88rem; color: rgb(var(--ink-secondary)); }
+.personal dd, .row dd { overflow-wrap: anywhere; min-width: 0; }
+.wide { grid-column: 1 / -1; }
+.note, .help { font-size: .9rem; }
+.note { margin-top: 8px; }
+.row { display: grid; grid-template-columns: minmax(0, .65fr) minmax(0, 1.35fr); gap: 10px; align-items: center; min-height: 44px; padding: 3px 0; }
+.row + .row { border-top: 1px solid var(--line-soft); }
+.row dt { display: flex; align-items: center; gap: 8px; }
+.icon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 6px; background: #d8efff; color: #202b39; }
+.row button { min-height: 44px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line-soft); background: rgb(var(--bg-nested)); font-weight: 600; transition: background-color 230ms var(--profile-motion), transform 210ms var(--profile-motion); }
+.row button:hover { background: rgb(var(--bg-elevated)); }
+.row button:active { transform: translateY(1px); }
+.passwordDialog { width: min(calc(100% - 24px), 29rem); max-height: calc(100dvh - 24px); border: 0; border-radius: 8px; background: transparent; padding: 0; }
+.passwordDialog { opacity: 0; translate: 0 5px; transition: opacity 250ms cubic-bezier(.22, 1, .36, 1), translate 250ms cubic-bezier(.22, 1, .36, 1), display 250ms allow-discrete, overlay 250ms allow-discrete; }
+.passwordDialog[open] { opacity: 1; translate: 0 0; }
+@starting-style { .passwordDialog[open] { opacity: 0; translate: 0 5px; } }
+.passwordDialog::backdrop { background: rgb(32 43 57 / .52); }
+.passwordDialog > div { border-radius: 8px; }
+.passwordDialog :is(button, input):focus-visible { outline: 2px solid #4b8cba; outline-offset: 2px; }
+@keyframes reveal { from { opacity: .45; translate: 0 4px; } }
+@keyframes art-in { from { opacity: .4; translate: 6px 0; } }
+@media (max-width: 640px) {
+  .art { display: none; }
+  .identity { min-height: 0; padding: 14px; gap: 10px; }
+  .avatar { width: 64px; height: 64px; }
+  .personal { grid-template-columns: minmax(0, 1fr); }
+  .row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 7px 0; }
+  .row button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile, .profile *, .passwordDialog { animation: none !important; transition: none !important; }
+}

@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useId, useLayoutEffect, useRef } from "react";
+import styles from "./CitizenProfilePage.module.css";
 import { Eye, EyeOff, KeyRound, X } from "lucide-react";
 import { AuthUser } from "@/lib/types";
 import { AppLang } from "@/lib/i18n";
@@ -9,6 +10,7 @@ interface PasswordModalProps {
   lang: AppLang;
   currentUser: AuthUser;
   open: boolean;
+  citizenDialog?: boolean;
   cpError: string;
   cpOldPass: string;
   setCpOldPass: (v: string) => void;
@@ -27,6 +29,7 @@ export default function PasswordModal({
   lang,
   currentUser,
   open,
+  citizenDialog = false,
   cpError,
   cpOldPass,
   setCpOldPass,
@@ -40,14 +43,21 @@ export default function PasswordModal({
   onClose,
   onSubmit,
 }: PasswordModalProps) {
-  if (!open) return null;
+  const dialog = useRef<HTMLDialogElement>(null);
+  const fieldId = useId();
+  useLayoutEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (open && !element.open) {
+      element.showModal();
+      element.querySelector("input")?.focus();
+    } else if (!open && element.open) {
+      element.close();
+    }
+  }, [open]);
+  if (!open && !citizenDialog) return null;
   const en = lang === "en";
-
-  return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4"
-    >
+  const form = (
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md bg-card border border-line rounded-2xl shadow-xl p-6 space-y-4"
@@ -65,6 +75,7 @@ export default function PasswordModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label={citizenDialog ? (en ? "Close" : "Tutup") : undefined}
             className="p-1 text-ink-muted hover:text-ink-primary"
           >
             <X className="w-5 h-5" />
@@ -72,20 +83,20 @@ export default function PasswordModal({
         </div>
 
         {cpError && (
-          <div className="p-3 rounded-xl bg-roseTech/10 border border-roseTech/35 text-xs font-semibold text-roseTech">
+          <div role={citizenDialog ? "alert" : undefined} className="p-3 rounded-xl bg-roseTech/10 border border-roseTech/35 text-xs font-semibold text-roseTech">
             {cpError}
           </div>
         )}
 
         <form onSubmit={onSubmit} className="space-y-3.5">
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-ink-primary">
+            <label htmlFor={citizenDialog ? fieldId + "-current" : undefined} className="block text-xs font-semibold text-ink-primary">
               {en ? "Current Password" : "Kata Sandi Lama"}
             </label>
             <input
               type={cpShowPass ? "text" : "password"}
               required
-              value={cpOldPass}
+              id={citizenDialog ? fieldId + "-current" : undefined} value={cpOldPass}
               onChange={(e) => setCpOldPass(e.target.value)}
               placeholder={
                 en ? "Enter current password" : "Masukkan kata sandi lama"
@@ -95,7 +106,7 @@ export default function PasswordModal({
           </div>
 
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-ink-primary">
+            <label htmlFor={citizenDialog ? fieldId + "-new" : undefined} className="block text-xs font-semibold text-ink-primary">
               {en
                 ? "New Password (min. 6 characters)"
                 : "Kata Sandi Baru (min. 6 karakter)"}
@@ -105,7 +116,7 @@ export default function PasswordModal({
                 type={cpShowPass ? "text" : "password"}
                 required
                 minLength={6}
-                value={cpNewPass}
+                id={citizenDialog ? fieldId + "-new" : undefined} value={cpNewPass}
                 onChange={(e) => setCpNewPass(e.target.value)}
                 placeholder={
                   en ? "Enter new password" : "Masukkan kata sandi baru"
@@ -127,14 +138,14 @@ export default function PasswordModal({
           </div>
 
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-ink-primary">
+            <label htmlFor={citizenDialog ? fieldId + "-confirm" : undefined} className="block text-xs font-semibold text-ink-primary">
               {en ? "Confirm New Password" : "Ulangi Kata Sandi Baru"}
             </label>
             <input
               type={cpShowPass ? "text" : "password"}
               required
               minLength={6}
-              value={cpConfirmPass}
+              id={citizenDialog ? fieldId + "-confirm" : undefined} value={cpConfirmPass}
               onChange={(e) => setCpConfirmPass(e.target.value)}
               placeholder={
                 en ? "Re-enter new password" : "Ketik ulang kata sandi baru"
@@ -167,6 +178,19 @@ export default function PasswordModal({
           </div>
         </form>
       </div>
+  );
+
+  if (citizenDialog) return (
+    <dialog ref={dialog} className={styles.passwordDialog + " no-print"} aria-label={en ? "Change Password" : "Ganti Kata Sandi"}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      {form}
+    </dialog>
+  );
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
+      {form}
     </div>
   );
 }

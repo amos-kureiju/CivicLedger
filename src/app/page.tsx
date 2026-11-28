@@ -76,10 +76,12 @@ import CoordinatorSearch from "@/components/CoordinatorSearch";
 import workspace from "@/components/CoordinatorWorkspace.module.css";
 import { Menu, PanelLeftClose, Settings, X as CloseMenu } from "lucide-react";
 import BeneficiaryTab from "@/components/BeneficiaryTab";
+import CitizenPortal from "@/components/CitizenPortal";
 import MerchantPosTab from "@/components/MerchantPosTab";
 import MerchantWorkspace, { maskSettlementAccount } from "@/components/MerchantWorkspace";
 import checkout from "@/components/MerchantWorkspace.module.css";
 import ClearinghouseTab from "@/components/ClearinghouseTab";
+import MerchantBalanceWorkspace from "@/components/MerchantBalanceWorkspace";
 import PasswordModal from "@/components/PasswordModal";
 import ReportsComplianceTab from "@/components/ReportsComplianceTab";
 import UserGuideTab from "@/components/UserGuideTab";
@@ -95,6 +97,8 @@ function hasRecordedCalendarCache() {
 }
 
 const coordinatorSora = Sora({ subsets: ["latin"], variable: "--font-coordinator-sora", display: "swap" });
+
+const PASSWORD_CHANGED_MESSAGE = "Kata sandi berhasil diganti.";
 
 type ActiveTab =
   | "COORDINATOR"
@@ -252,7 +256,7 @@ export default function CivicLedgerApp() {
     : selectedWalletBeneficiaryId;
   const [selectedVoucherForQR, setSelectedVoucherForQR] =
     useState<Voucher | null>(null);
-  const [voucherQr, setVoucherQr] = useState<{ voucherId: string; url: string } | null>(null);
+  const [voucherQr, setVoucherQr] = useState<{ voucherId: string; payload: string; url: string } | null>(null);
   const [copiedSms, setCopiedSms] = useState<boolean>(false);
 
   // State Kasir Kedai
@@ -277,7 +281,6 @@ export default function CivicLedgerApp() {
   const syncBusy = useRef(false);
   const [verifying, setVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState("");
-  const [verifiedExpiry, setVerifiedExpiry] = useState("");
   const [offlineSimulation, setOfflineSimulation] = useState(false);
   const [merchantRejections, setMerchantRejections] = useState(0);
   const [merchantSyncIds, setMerchantSyncIds] = useState<string[]>([]);
@@ -436,7 +439,7 @@ export default function CivicLedgerApp() {
       setCpNewPass("");
       setCpConfirmPass("");
       setShowChangePasswordModal(false);
-      showToast("success", "Kata sandi berhasil diganti.");
+      showToast("success", PASSWORD_CHANGED_MESSAGE);
     } catch {
       setCpError("Tidak bisa tersambung ke server.");
     } finally {
@@ -660,7 +663,7 @@ export default function CivicLedgerApp() {
       margin: 4,
       color: { dark: "#1d2622", light: "#ffffff" },
     })
-      .then((url) => { if (!cancelled) setVoucherQr({ voucherId, url }); })
+      .then((url) => { if (!cancelled) setVoucherQr({ voucherId, payload, url }); })
       .catch(() => { if (!cancelled) setVoucherQr(null); });
     return () => { cancelled = true; };
   }, [selectedVoucherForQR]);
@@ -1060,9 +1063,13 @@ export default function CivicLedgerApp() {
     );
   };
 
-  const handleCopySmsSlip = (voucher: Voucher) => {
+  const handleCopySmsSlip = async (voucher: Voucher) => {
     const text = `[Kupon Sembako CivicLedger]\nNama: ${voucher.beneficiary_name}\nKode: ${voucher.short_code}\nPaket: ${voucher.commodity_name} (${formatRupiah(voucher.nominal_idr)})\nBerlaku s/d: ${formatDateTime(voucher.expires_at)}\nTunjukkan kode ini di kedai mitra terdekat.`;
-    navigator.clipboard.writeText(text);
+    if (currentUser?.role === "BENEFICIARY") {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    void navigator.clipboard.writeText(text);
     setCopiedSms(true);
     setTimeout(() => setCopiedSms(false), 2200);
     showToast("info", `Teks SMS untuk kupon ${voucher.short_code} disalin.`);
@@ -1076,7 +1083,6 @@ export default function CivicLedgerApp() {
     if (merchantRequest) {
       setCryptoTrace(null);
       setVerificationError("");
-      setVerifiedExpiry("");
     }
     try {
       await verifyAndRedeem(simulate, raw, code);
@@ -1159,7 +1165,6 @@ export default function CivicLedgerApp() {
       );
       return;
     }
-    setVerifiedExpiry(targetVoucher.expires_at);
 
     const clientTxId = generateClientTxId();
 
@@ -1516,6 +1521,7 @@ export default function CivicLedgerApp() {
   };
 
   const handleVerifyHashChain = async () => {
+    const merchantView = currentUser?.role === "MERCHANT";
     setIsVerifyingChain(true);
     try {
       const clientRes = await verifyLedgerChainWebCrypto(ledger);
@@ -1524,6 +1530,7 @@ export default function CivicLedgerApp() {
         const res = await fetch("/api/clearinghouse?op=verify_chain", {
           cache: "no-store",
         });
+        if (!res.ok && merchantView) throw new Error("Ledger verification request failed");
         if (res.ok) {
           const serverRes = (await res.json()) as ChainVerificationResult;
           finalRes = {
@@ -1537,7 +1544,8 @@ export default function CivicLedgerApp() {
         }
       }
       setChainCheckResult(finalRes);
-      showToast(finalRes.valid ? "success" : "error", finalRes.message);
+      if (!merchantView) showToast(finalRes.valid ? "success" : "error", finalRes.message);
+      return finalRes;
     } finally {
       setIsVerifyingChain(false);
     }
@@ -1824,11 +1832,6 @@ export default function CivicLedgerApp() {
   const activeMerchant = merchants.find((merchant) => merchant.id === merchantId);
   const merchantLedger = ledger.filter((entry) => entry.merchant_id === merchantId);
   const merchantQueue = offlineQueue.filter((item) => item.merchant_id === merchantId);
-  const merchantReceipt = merchantLedger.find((entry) => entry.client_tx_id === cryptoTrace?.clientTxId)
-    ?? merchantQueue.find((entry) => entry.client_tx_id === cryptoTrace?.clientTxId);
-  const recipientName = merchantReceipt
-    ? vouchers.find((voucher) => voucher.id === merchantReceipt.voucher_id && voucher.beneficiary_id === merchantReceipt.beneficiary_id)?.beneficiary_name
-    : undefined;
   const demoMerchant = merchantRole && merchantId === "WRG-01" && currentUser.email === "kedai@civicledger.id";
   const demoVouchers = demoMerchant ? vouchers.filter((voucher) =>
     ["VCH-2026-8841", "VCH-2026-7732", "VCH-2026-6619", "VCH-2026-5508"].includes(voucher.id) &&
@@ -1862,13 +1865,13 @@ export default function CivicLedgerApp() {
       { name: "Management", entries: clearNav },
     ];
     return (
-      <nav className={workspace.organizerNav} aria-label={merchantRole ? (lang === "en" ? "Merchant navigation" : "Navigasi kedai") : (lang === "en" ? "Organizer navigation" : "Navigasi pengurus")}>
+      <nav className={merchantRole ? workspace.organizerNav + " " + checkout.sidebarNav : workspace.organizerNav} aria-label={merchantRole ? (lang === "en" ? "Merchant navigation" : "Navigasi kedai") : (lang === "en" ? "Organizer navigation" : "Navigasi pengurus")}>
         {groups.map(({ name, entries }) => (
           <div key={name} className={workspace.navGroup}>
             <p>{name}</p>
             {entries.map(({ id, label, icon: Icon }) => {
               const title = id === "COORDINATOR" ? "Dashboard"
-                : merchantRole && id === "MERCHANT_POS" ? (lang === "en" ? "Checkout & QR Scan" : "Kasir & Scan QR")
+                : merchantRole && id === "GUIDE" ? (lang === "en" ? "User Guide" : "Cara Pakai")
                 : id === "CLEARINGHOUSE" ? (merchantRole ? (lang === "en" ? "Balance & History" : "Saldo & Riwayat") : (lang === "en" ? "Fund Settlement" : "Pencairan Dana"))
                 : label;
               return (
@@ -1882,7 +1885,7 @@ export default function CivicLedgerApp() {
                   if (distance && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
                     requestAnimationFrame(() => button.querySelector("[data-nav-marker]")?.animate(
                       [{ transform: "translateY(" + distance + "px)", opacity: .3 }, { transform: "translateY(0)", opacity: 1 }],
-                      { duration: 340, easing: "cubic-bezier(.22, .7, .24, 1)" },
+                      { duration: 340, easing: merchantRole ? "cubic-bezier(.22, 1, .36, 1)" : "cubic-bezier(.22, .7, .24, 1)" },
                     ));
                   }
                 }}>
@@ -1894,16 +1897,38 @@ export default function CivicLedgerApp() {
             })}
           </div>
         ))}
-        <div className={workspace.navGroup}>
-          <p>{merchantRole && lang !== "en" ? "Akun" : "Account"}</p>
+        <div className={merchantRole ? workspace.navGroup + " " + checkout.sidebarSettings : workspace.navGroup}>
+          {!merchantRole && <p>Account</p>}
           <button type="button" title={lang === "en" ? "Settings" : "Pengaturan"} aria-label={lang === "en" ? "Settings" : "Pengaturan"} onClick={openOrganizerSettings}>
             <Settings size={18} /><span>{lang === "en" ? "Settings" : "Pengaturan"}</span>
           </button>
-          <button type="button" title={lang === "en" ? "Sign out" : "Keluar"} aria-label={lang === "en" ? "Sign out" : "Keluar"} onClick={handleLogout}>
+          {!merchantRole && <button type="button" title={lang === "en" ? "Sign out" : "Keluar"} aria-label={lang === "en" ? "Sign out" : "Keluar"} onClick={handleLogout}>
             <LogOut size={18} /><span>{lang === "en" ? "Sign out" : "Keluar"}</span>
-          </button>
+          </button>}
         </div>
       </nav>
+    );
+  }
+
+  function merchantSidebarFooter() {
+    const offlineReadiness = lang === "en"
+      ? (swRegistered ? "Offline ready" : "Offline not ready")
+      : (swRegistered ? "Offline siap" : "Offline belum siap");
+    const signOut = lang === "en" ? "Sign out" : "Keluar";
+    return (
+      <footer className={checkout.sidebarFooter}>
+        <div className={checkout.sidebarStatus} role="status">
+          <span title={deviceOnline ? "Online" : "Offline"}>
+            <i data-ready={deviceOnline} aria-hidden="true" /><span>{deviceOnline ? "Online" : "Offline"}</span>
+          </span>
+          <span title={offlineReadiness}>
+            <i data-ready={swRegistered} aria-hidden="true" /><span>{offlineReadiness}</span>
+          </span>
+        </div>
+        <button type="button" title={signOut} aria-label={signOut} onClick={handleLogout}>
+          <LogOut size={18} /><span>{signOut}</span>
+        </button>
+      </footer>
     );
   }
 
@@ -1912,6 +1937,57 @@ export default function CivicLedgerApp() {
     setSelectedVoucherForQR(voucher);
     setActiveTab("BENEFICIARY");
   }
+
+  const passwordModal = (
+    <PasswordModal
+      lang={lang}
+      currentUser={currentUser}
+      open={showChangePasswordModal}
+      citizenDialog={currentUser.role === "BENEFICIARY"}
+      cpError={cpError}
+      cpOldPass={cpOldPass}
+      setCpOldPass={setCpOldPass}
+      cpNewPass={cpNewPass}
+      setCpNewPass={setCpNewPass}
+      cpConfirmPass={cpConfirmPass}
+      setCpConfirmPass={setCpConfirmPass}
+      cpShowPass={cpShowPass}
+      setCpShowPass={setCpShowPass}
+      cpBusy={cpBusy}
+      onClose={() => setShowChangePasswordModal(false)}
+      onSubmit={handleChangePasswordSubmit}
+    />
+  );
+  const citizenPortal = currentUser.role === "BENEFICIARY" ? (
+    <CitizenPortal
+      key={currentUser.id}
+      fontClass={coordinatorSora.variable}
+      lang={lang}
+      user={currentUser}
+      recipient={currentWalletBeneficiary}
+      vouchers={currentWalletVouchers}
+      selected={selectedVoucherForQR?.beneficiary_id === walletBeneficiaryId ? selectedVoucherForQR : null}
+      qr={voucherQr}
+      online={deviceOnline}
+      cached={!loading && calendarAvailability !== "live"}
+      loading={loading}
+      simulation={currentUser.email === "warga@civicledger.id" && walletBeneficiaryId === "WGA-0401"}
+      passwordChanged={actionBanner?.type === "success" && actionBanner.text === PASSWORD_CHANGED_MESSAGE}
+      compact={compactRail}
+      largeText={largeText}
+      dark={theme === "dark"}
+      onSelect={setSelectedVoucherForQR}
+      onCompact={setCompactRail}
+      onLanguage={updateLang}
+      onTextSize={updateLargeText}
+      onTheme={(dark) => updateTheme(dark ? "dark" : "light")}
+      onRefresh={fetchClearinghouseState}
+      onCopySms={handleCopySmsSlip}
+      onPassword={openPassword}
+      onLogout={handleLogout}
+    />
+  ) : null;
+  if (citizenPortal) return <>{citizenPortal}{passwordModal}</>;
 
   return (
     <div
@@ -1922,7 +1998,7 @@ export default function CivicLedgerApp() {
       {/* ==================== SIDEBAR KIRI (DESKTOP) ==================== */}
       <aside className="no-print hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-surface border-r border-line/70 z-30 select-none">
         {workspaceShell ? (
-          <div className={workspace.brandHeader}>
+          <div className={merchantRole ? workspace.brandHeader + " " + checkout.sidebarBrand : workspace.brandHeader}>
             <button
               className={workspace.brandMark}
               type="button"
@@ -1937,8 +2013,8 @@ export default function CivicLedgerApp() {
               }}
             ><span aria-hidden="true">C</span></button>
             <div className={workspace.brandCopy} aria-hidden={compactRail}>
-              <div className={workspace.brandMask}><span>Civic<em>Ledger.</em></span></div>
-              <p>{merchantRole ? (lang === "en" ? "Merchant Workspace" : "Ruang Kerja Kedai") : "Community Workspace"}</p>
+              <div className={workspace.brandMask}><span>Civic<em>Ledger{merchantRole ? "" : "."}</em></span></div>
+              <p>{merchantRole ? "Merchant Workspace" : "Community Workspace"}</p>
             </div>
             <button
               className={workspace.brandCollapse}
@@ -2096,6 +2172,7 @@ export default function CivicLedgerApp() {
         </nav>
         )}
 
+        {merchantRole && merchantSidebarFooter()}
         {/* Kontrol Bawah */}
         {!merchantRole && <div className="p-3.5 border-t border-line/60 bg-surface space-y-2.5">
           <div className="space-y-2">
@@ -2301,6 +2378,7 @@ export default function CivicLedgerApp() {
               <summary aria-label={lang === "en" ? "Account and settings" : "Akun dan pengaturan"}><span className={workspace.avatar}>{currentUser.name.charAt(0)}</span><strong>{activeMerchant?.name ?? currentUser.name}</strong></summary>
               <div onClick={(event) => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.closest("details")?.removeAttribute("open"); }}>
                 <strong>{currentUser.name}</strong>
+                {activeMerchant && maskSettlementAccount(activeMerchant.bank_account) && <small>{lang === "en" ? "Settlement account" : "Rekening pencairan"} {maskSettlementAccount(activeMerchant.bank_account)}</small>}
                 <small>{engineShortText} · {realtimeConnected ? (lang === "en" ? "Live updates connected" : "Pembaruan langsung terhubung") : (lang === "en" ? "Live updates disconnected" : "Pembaruan langsung terputus")}</small>
                 <button type="button" onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? t.dayMode : t.nightMode}</button>
                 <button type="button" onClick={() => updateLargeText(!largeText)}>{largeText ? t.largeTextOn : t.largeTextOff}</button>
@@ -2428,9 +2506,10 @@ export default function CivicLedgerApp() {
             </details>}
           </div>
         </header>)}
-        {workspaceShell && <dialog ref={mobileNavigation} className={workspace.dialog} aria-labelledby="rail-title">
+        {workspaceShell && <dialog ref={mobileNavigation} className={merchantRole ? workspace.dialog + " " + checkout.sidebarDialog : workspace.dialog} aria-labelledby="rail-title">
           <header className={workspace.dialogHead}><h2 id="rail-title">CivicLedger</h2><button type="button" onClick={() => mobileNavigation.current?.close()} aria-label={lang === "en" ? "Close" : "Tutup"}><CloseMenu size={18} /></button></header>
           {organizerNavigation()}
+          {merchantRole && merchantSidebarFooter()}
         </dialog>}
 
         {/* Tab Mobile */}
@@ -2651,8 +2730,6 @@ export default function CivicLedgerApp() {
                   verifying={verifying}
                   verificationError={verificationError}
                   trace={cryptoTrace}
-                  expiresAt={verifiedExpiry}
-                  recipientName={recipientName}
                   syncError={cryptoTrace ? reconciliationLogs.find((log) => log.client_tx_id === cryptoTrace.clientTxId && log.merchant_id === merchantId && log.outcome !== "SYNCED")?.reason : undefined}
                   onVerify={handleVerifyAndRedeem}
                   onClear={() => {
@@ -2712,17 +2789,30 @@ export default function CivicLedgerApp() {
                 )}
 
                 {/* TAB 4: PENCAIRAN & RIWAYAT */}
-                {activeTab === "CLEARINGHOUSE" && (
+                {activeTab === "CLEARINGHOUSE" && merchantRole && (
+                  <MerchantBalanceWorkspace
+                    key={currentUser.id}
+                    lang={lang}
+                    merchant={activeMerchant && { ...activeMerchant, bank_account: maskSettlementAccount(activeMerchant.bank_account) }}
+                    ledger={merchantLedger}
+                    queue={merchantQueue}
+                    logs={reconciliationLogs.filter((log) => log.merchant_id === merchantId)}
+                    settlements={settlementBatches.filter((batch) => batch.merchant_id === merchantId).map((batch) => ({ ...batch, bank_account: maskSettlementAccount(batch.bank_account) }))}
+                    onVerify={handleVerifyHashChain}
+                    onExport={handleExportJson}
+                  />
+                )}
+                {activeTab === "CLEARINGHOUSE" && !merchantRole && (
                   <ClearinghouseTab
                     lang={lang}
                     currentUser={currentUser}
                     poolTotalIdr={poolTotalIdr}
-                    totalUnsettledIdr={merchantRole ? (activeMerchant?.unsettled_balance_idr ?? 0) : totalUnsettledIdr}
-                    totalSettledBatchesIdr={merchantRole ? (activeMerchant?.total_settled_idr ?? 0) : totalSettledBatchesIdr}
-                    merchants={merchantRole ? (activeMerchant ? [{ ...activeMerchant, bank_account: maskSettlementAccount(activeMerchant.bank_account) }] : []) : merchants}
-                    ledger={merchantRole ? merchantLedger : ledger}
-                    reconciliationLogs={merchantRole ? reconciliationLogs.filter((log) => log.merchant_id === merchantId) : reconciliationLogs}
-                    settlementBatches={merchantRole ? settlementBatches.filter((batch) => batch.merchant_id === merchantId).map((batch) => ({ ...batch, bank_account: maskSettlementAccount(batch.bank_account) })) : settlementBatches}
+                    totalUnsettledIdr={totalUnsettledIdr}
+                    totalSettledBatchesIdr={totalSettledBatchesIdr}
+                    merchants={merchants}
+                    ledger={ledger}
+                    reconciliationLogs={reconciliationLogs}
+                    settlementBatches={settlementBatches}
                     showFullHashes={showFullHashes}
                     setShowFullHashes={setShowFullHashes}
                     isVerifyingChain={isVerifyingChain}
@@ -2775,23 +2865,7 @@ export default function CivicLedgerApp() {
       </div>
 
       {/* MODAL GANTI KATA SANDI */}
-      <PasswordModal
-        lang={lang}
-        currentUser={currentUser}
-        open={showChangePasswordModal}
-        cpError={cpError}
-        cpOldPass={cpOldPass}
-        setCpOldPass={setCpOldPass}
-        cpNewPass={cpNewPass}
-        setCpNewPass={setCpNewPass}
-        cpConfirmPass={cpConfirmPass}
-        setCpConfirmPass={setCpConfirmPass}
-        cpShowPass={cpShowPass}
-        setCpShowPass={setCpShowPass}
-        cpBusy={cpBusy}
-        onClose={() => setShowChangePasswordModal(false)}
-        onSubmit={handleChangePasswordSubmit}
-      />
+      {passwordModal}
     </div>
   );
 }
