@@ -274,12 +274,12 @@ export default function CitizenPortal(p: Props) {
 
   return <div className={[workspace.shell, rail.shell, styles.portal, p.fontClass].join(" ")} data-compact={p.compact}>
     <aside ref={sidebar} className="no-print hidden lg:flex lg:flex-col" aria-label={c.portal}>
-      <span ref={indicator} className={styles.activeRail} data-layout-id="citizen-sidebar-active" data-footer={view === "settings"} aria-hidden="true" />
       <div ref={brand} className={workspace.brandHeader + " " + rail.sidebarBrand}>
         <button type="button" className={workspace.brandMark} disabled={!p.compact} aria-hidden={!p.compact} aria-expanded={!p.compact} aria-label={c.expand} onClick={toggleRail}><span aria-hidden="true">C</span></button>
         <div className={workspace.brandCopy} aria-hidden={p.compact}><div className={workspace.brandMask}><span>Civic<em>Ledger</em></span></div><p>{c.portal}</p></div>
         <button type="button" className={workspace.brandCollapse} disabled={p.compact} aria-hidden={p.compact} aria-expanded={!p.compact} aria-label={c.collapse} onClick={toggleRail}><PanelLeftClose size={17} aria-hidden="true" /></button>
       </div>
+      <span ref={indicator} className={styles.activeRail} data-layout-id="citizen-sidebar-active" data-footer={view === "settings"} aria-hidden="true" />
       {navigation()}
       {footer()}
     </aside>

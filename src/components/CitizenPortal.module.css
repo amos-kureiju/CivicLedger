@@ -190,7 +190,7 @@
   background: var(--workspace-cutout); border-radius: var(--corner-cutout) 0 0 var(--corner-cutout);
   transition: transform 300ms var(--citizen-motion), height 260ms var(--citizen-motion);
 }
-.portal[data-compact="true"] .activeRail { inset-inline-start: 6px; }
+.portal.portal[data-compact="true"] > aside > .activeRail { display: block; inset-inline-start: 6px; }
 .activeRail::before, .activeRail::after { content: ""; position: absolute; right: 0; width: var(--corner-cutout); height: var(--corner-cutout); }
 .activeRail::before { bottom: calc(100% - 1px); background: radial-gradient(circle at top left, transparent var(--corner-cutout), var(--workspace-cutout) calc(var(--corner-cutout) + .5px)); }
 .activeRail::after { top: calc(100% - 1px); background: radial-gradient(circle at bottom left, transparent var(--corner-cutout), var(--workspace-cutout) calc(var(--corner-cutout) + .5px)); }
